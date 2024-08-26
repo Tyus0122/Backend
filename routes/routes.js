@@ -2,7 +2,7 @@ const express = require('express')
 const router = express.Router()
 const { loginSubmit, login, signup, signupSubmit } = require('../controllers/authController')
 const { validateToken, preventValidToken } = require('../middlewares/authMidware')
-const {protectedRoute}=require('../controllers/protectedController')
+const {protectedRoute,Dashboard}=require('../controllers/DashboardController')
 const {upload}=require("../middlewares/multer")
 
 //Authorization
@@ -13,6 +13,7 @@ router.post('/loginSubmit', preventValidToken, loginSubmit)
 
 //Protected routes
 router.post('/protected', validateToken, upload.single('file') ,protectedRoute)
+router.get('/dashboard', validateToken ,Dashboard)
 
 
 module.exports = router

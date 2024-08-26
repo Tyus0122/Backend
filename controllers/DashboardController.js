@@ -10,8 +10,11 @@ const protectedRoute = async (req, res) => {
 }
 
 
-
+const Dashboard = async (req, res) => {
+    return new SuccessResponse(res, { message: "dashboard" })
+}
 
 module.exports = {
-    protectedRoute: protectedRoute,
+    protectedRoute,
+    Dashboard
 }   

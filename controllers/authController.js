@@ -7,7 +7,7 @@ const bcrypt = require('bcrypt');
 
 const loginSubmit = async (req, res) => {
     const user = await userCollection.findOne({email: req.body.email});
-    if (_.isEqual(user, [])) {
+    if (_.isNil(user)) {
         return new ErrorResponse(res, constants.USER_NOT_FOUND, 404)
     }
     const isMatch =await bcrypt.compare(req.body.password, user.hashPassword);
