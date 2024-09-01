@@ -12,7 +12,8 @@ let schema = new mongoose.Schema(
         },
         email: {
             type: String,
-            requires: true
+            requires: true,
+            unique: true
         },
         dob: {
             type: String,
@@ -30,6 +31,55 @@ let schema = new mongoose.Schema(
             type: String,
             requires: true
         },
+        otp: {
+            type: String,
+            requires: true
+        },
+        connectionRequests: {
+            type: [mongoose.Schema.Types.ObjectId],
+            default: []
+        },
+        connectionRequestssent: {
+            type: [mongoose.Schema.Types.ObjectId],
+            default: []
+        },
+        connections: {
+            type: [mongoose.Schema.Types.ObjectId],
+            default: []
+        },
+        city: {
+            type: String,
+            default: "N-A"
+        },
+        accomodation: {
+            type: Boolean,
+            default: false
+        },
+        university: {
+            type: String,
+            default: "N-A"
+        },
+        bio: {
+            type: String,
+            default: "N-A"
+        },
+        pic: {
+            type: {
+                url: {
+                    type: String,
+                    required: true
+                },
+                size: {
+                    type: String,
+                    required: true
+                },
+                mimeType: {
+                    type: String,
+                    required: true
+                }
+            },
+            required: true
+        }
     },
     { timestamps: true }
 );

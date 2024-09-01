@@ -1,6 +1,8 @@
 const AWS = require('aws-sdk');
 const { ErrorResponse } = require('./response');
 const { constants } = require('../utils/constants')
+const mongoose = require('mongoose');
+
 AWS.config.update({
     accessKeyId: process.env.S3_ACCESS_KEY,
     secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
@@ -8,7 +10,7 @@ AWS.config.update({
 });
 
 const uploadFile = async (filename, body, mimeType) => {
-    try{
+    try {
         const s3 = new AWS.S3();
         let params = {
             Bucket: process.env.S3_BUCKET,
@@ -19,8 +21,8 @@ const uploadFile = async (filename, body, mimeType) => {
         let file = await s3.putObject(params).promise()
         console.log("file successfully uploaded")
     }
-    catch(err){
-        console.log("error uploading :"+err.message)
+    catch (err) {
+        console.log("error uploading :" + err.message)
     }
 
 }
@@ -40,7 +42,12 @@ const getFileMetadata = ({ originalname, mimetype, size }) => {
     }
 }
 
+const mongoId = (id) => {
+    return new mongoose.mongo.ObjectId(id)
+}
+
 module.exports = {
     uploadFile,
-    getFileMetadata
+    getFileMetadata,
+    mongoId
 }

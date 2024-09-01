@@ -2,6 +2,7 @@ const {SuccessResponse,ErrorResponse} =require('../helpers/response');
 const jwt = require("jsonwebtoken");
 const _= require('lodash');
 const constants = require('../utils/constants');
+const userCollection= require("../models/user");
 const validateToken = async (req, res, next) => {
     token = req.headers['authorization']
     if (_.isNil(token) || !token.startsWith('Bearer ')) {
@@ -12,7 +13,8 @@ const validateToken = async (req, res, next) => {
         if (err) {
             return new ErrorResponse(res,err.message,403)
         }
-        req.user = decoded.obj
+        _id = decoded.obj._id
+        req.user=await userCollection.findOne({_id:_id})
         return next();
     }))
 }
