@@ -35,6 +35,7 @@ const signup = async (req, res) => {
 }
 
 const signupSubmit = async (req, res) => {
+    console.log(req.body)
     try {
         let user = await userCollection.findOne({ email: req.body.email })
         if (!_.isNil(user)) {
@@ -47,6 +48,7 @@ const signupSubmit = async (req, res) => {
             email: req.body.email,
             dob: req.body.dob,
             phno: req.body.phno,
+            phnocode: req.body.phnocode,
             password: req.body.password,
             hashPassword: hashPassword
         })
@@ -62,7 +64,7 @@ const getOtp = async (req, res) => {
     try {
         let user = await userCollection.findOne({ phno: req.body.phno })
         if (_.isNil(user)) {
-            return new ErrorResponse(res, constants.USER_NOT_FOUND, 201);
+            return new ErrorResponse(res, constants.USER_NOT_FOUND, 420);
         }
         let otp = Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
         await userCollection.updateOne({ phno: req.body.phno }, { otp: otp })
@@ -78,13 +80,13 @@ const postOtp = async (req, res) => {
     try {
         let user = await userCollection.findOne({ phno: req.body.phno })
         if (_.isNil(user)) {
-            return new ErrorResponse(res, constants.USER_NOT_FOUND, 201);
+            return new ErrorResponse(res, constants.USER_NOT_FOUND, 420);
         }
         if (user.otp === req.body.otp) {
             return new SuccessResponse(res, { message: "success" })
         }
         else {
-            return new ErrorResponse(res, constants.INVALID_OTP)
+            return new ErrorResponse(res, constants.INVALID_OTP,420)
         }
     }
     catch (err) {

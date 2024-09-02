@@ -23,6 +23,10 @@ let schema = new mongoose.Schema(
             type: String,
             requires: true
         },
+        phnocode: {
+            type: String,
+            requires: true
+        },
         password: {
             type: String,
             requires: true
@@ -78,7 +82,6 @@ let schema = new mongoose.Schema(
                     required: true
                 }
             },
-            required: true
         }
     },
     { timestamps: true }

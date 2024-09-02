@@ -139,7 +139,6 @@ const getPosts = async (req, res) => {
             comment.commentedByName.add(users[_id.commentedBy.toString()].fullname)
         })
     })
-    console.log(comments)
     let commentscount = _.keyBy(comments, (comment) => comment._id.toString())
     _.forEach(posts, (post) => {
         liked = new Set(post.likes.map(liked => liked.toString()))

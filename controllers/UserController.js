@@ -12,15 +12,76 @@ const protectedRoute = async (req, res) => {
 }
 
 const getUsers = async (req, res) => {
-    return new SuccessResponse(res, { message: req.user })
+    let output = {}
+    output.isLastPage = false
+    try {
+        const userPipeline = [
+            {
+                $match: {
+                    _id: {
+                        $ne: req.user._id
+                    },
+                    accomodation: true,
+                    username: {
+                        $regex: new RegExp(req.query.search, 'i')
+                    },
+                    accomodation:req.query.available === 'true'
+                }
+            },
+            {
+                $project: {
+                    _id: 1,
+                    city: 1,
+                    connectionRequests: 1,
+                    connectionRequestssent: 1,
+                    connections: 1,
+                    username: 1,
+                }
+            },
+            {
+                $skip:constants.PAGE_LIMIT * parseInt(req.query.page)
+            },
+            {
+                $limit: constants.PAGE_LIMIT
+            }
+        ]
+        output.users = await userCollection.aggregate(userPipeline)
+        if (output.users.length < 5) {
+            output.isLastPage = true
+        }
+        _.forEach(output.users, (user) => {
+            let connectionRequests = new Set(user.connectionRequests.map(obj => obj.toString()))
+            let connections = new Set(user.connections.map(obj => obj.toString()))
+            let connectionRequestssent = new Set(user.connectionRequestssent.map(obj => obj.toString()))
+            if (connections.has(req.user._id.toString())) {
+                user.statusvalue = 'connected'
+            }
+            else if (connectionRequests.has(req.user._id.toString())) {
+                user.statusvalue = 'Request sent'
+            }
+            else if (connectionRequestssent.has(req.user._id.toString())) {
+                user.statusvalue = 'Accept'
+            }
+            else {
+                user.statusvalue = 'connect'
+            }
+
+        })
+        return new SuccessResponse(res, { message: output })
+    }
+    catch (e) {
+        console.log("error in getUsers: ", e.message)
+        return new ErrorResponse(res, "error in getting users")
+    }
 }
 const sendConnectionRequest = async (req, res) => {
     try {
+        console.log(req.body)
         let user = await userCollection.findOne({ _id: req.body.user_id })
         let connectionRequests = new Set(user.connectionRequests.map(obj => obj.toString()))
         let connections = new Set(user.connections.map(obj => obj.toString()))
         if (_.isEqual(mongoId(req.body.user_id), req.user._id)) {
-            return new ErrorResponse(res, "not allowed")
+            return new ErrorResponse(res, { "message": "not allowed" })
         }
         if (connections.has(req.user._id.toString())) {
             return new ErrorResponse(res, "you are already connected")
