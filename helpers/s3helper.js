@@ -2,19 +2,23 @@ const AWS = require('aws-sdk');
 const { ErrorResponse } = require('./response');
 const { constants } = require('../utils/constants')
 const mongoose = require('mongoose');
-
+const { v4: uuidv4 } = require('uuid');
 AWS.config.update({
     accessKeyId: process.env.S3_ACCESS_KEY,
     secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
     region: process.env.region
 });
-
-const uploadFile = async (filename, body, mimeType) => {
+function generateUniqueFileName(originalName) {
+    const fileExtension = originalName.split('.').pop(); // extract file extension
+    const uniqueName = uuidv4(); // generate unique identifier
+    return `${uniqueName}.${fileExtension}`;
+}
+const uploadFile = async (unqFileName, body, mimeType) => {
     try {
         const s3 = new AWS.S3();
         let params = {
             Bucket: process.env.S3_BUCKET,
-            Key: filename,
+            Key: unqFileName,
             Body: body,
             ContentType: mimeType,
         }
@@ -34,11 +38,12 @@ function formatFileSize(bytes) {
     const size = bytes / Math.pow(1024, i);
     return `${size.toFixed(2)} ${sizes[i]}`;
 }
-const getFileMetadata = ({ originalname, mimetype, size }) => {
+const getFileMetadata = ({ unqFileName, originalname, mimetype, size }) => {
     return {
         size: formatFileSize(size),
-        url: `https://${process.env.S3_BUCKET}.s3.amazonaws.com/${originalname}`,
-        mimeType: mimetype
+        url: `https://${process.env.S3_BUCKET}.s3.${process.env.S3_REGION}.amazonaws.com/${unqFileName}`,
+        mimeType: mimetype,
+        fileName: originalname,
     }
 }
 
@@ -49,5 +54,6 @@ const mongoId = (id) => {
 module.exports = {
     uploadFile,
     getFileMetadata,
-    mongoId
+    mongoId,
+    generateUniqueFileName
 }

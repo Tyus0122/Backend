@@ -17,7 +17,7 @@ router.post('/changePassword', preventValidToken, passwordChange)
 
 //Dashboard routes
 router.post('/protected', validateToken, upload.single('file'), protectedRoute)
-router.post('/postPost', validateToken, upload.single('file'), postPost)
+router.post('/postPost', validateToken, upload.array('files'), postPost) 
 router.get('/dashboard', validateToken, Dashboard)
 router.post('/likePost', validateToken, likePost)
 router.post('/commentPost', validateToken, commentPost)

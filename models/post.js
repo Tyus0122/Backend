@@ -8,7 +8,6 @@ let schema = new mongoose.Schema(
         },
         peopleTagged: {
             type: [mongoose.Schema.Types.ObjectId],
-            required: true
         },
         date: {
             type: String,
@@ -22,9 +21,9 @@ let schema = new mongoose.Schema(
             type: String,
             required: true
         },
-        file: {
+        files: [{
             type: {
-                url:{
+                url: {
                     type: String,
                     required: true
                 },
@@ -35,22 +34,26 @@ let schema = new mongoose.Schema(
                 mimeType: {
                     type: String,
                     required: true
+                },
+                fileName: {
+                    type: String,
+                    required: true
                 }
             },
             required: true
-        },
+        }],
         likes: {
             type: [mongoose.Schema.Types.ObjectId],
-            default:[]
+            default: []
         },
-        likescount:{
+        likescount: {
             type: Number,
             required: true,
-            default:0
+            default: 0
         },
         posted_by: {
-            type:mongoose.Schema.Types.ObjectId,
-            required:true
+            type: mongoose.Schema.Types.ObjectId,
+            required: true
         }
     },
     { timestamps: true }

@@ -15,13 +15,12 @@ const getUsers = async (req, res) => {
     let output = {}
     output.isLastPage = false
     try {
-        const userPipeline = [
+        let userPipeline = [
             {
                 $match: {
                     _id: {
                         $ne: req.user._id
                     },
-                    accomodation: true,
                     username: {
                         $regex: new RegExp(req.query.search, 'i')
                     },
@@ -45,28 +44,40 @@ const getUsers = async (req, res) => {
                 $limit: constants.PAGE_LIMIT
             }
         ]
+        if (req.query.available == "NA") {
+            userPipeline = [
+                {
+                    $match: {
+                        _id: {
+                            $ne: req.user._id
+                        },
+                        username: {
+                            $regex: new RegExp(req.query.search, 'i')
+                        },
+                    }
+                },
+                {
+                    $project: {
+                        _id: 1,
+                        city: 1,
+                        connectionRequests: 1,
+                        connectionRequestssent: 1,
+                        connections: 1,
+                        username: 1,
+                    }
+                },
+                {
+                    $skip:constants.PAGE_LIMIT * parseInt(req.query.page)
+                },
+                {
+                    $limit: constants.PAGE_LIMIT
+                }
+            ]   
+        }
         output.users = await userCollection.aggregate(userPipeline)
         if (output.users.length < 5) {
             output.isLastPage = true
         }
-        _.forEach(output.users, (user) => {
-            let connectionRequests = new Set(user.connectionRequests.map(obj => obj.toString()))
-            let connections = new Set(user.connections.map(obj => obj.toString()))
-            let connectionRequestssent = new Set(user.connectionRequestssent.map(obj => obj.toString()))
-            if (connections.has(req.user._id.toString())) {
-                user.statusvalue = 'connected'
-            }
-            else if (connectionRequests.has(req.user._id.toString())) {
-                user.statusvalue = 'Request sent'
-            }
-            else if (connectionRequestssent.has(req.user._id.toString())) {
-                user.statusvalue = 'Accept'
-            }
-            else {
-                user.statusvalue = 'connect'
-            }
-
-        })
         return new SuccessResponse(res, { message: output })
     }
     catch (e) {

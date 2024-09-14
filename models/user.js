@@ -80,6 +80,11 @@ let schema = new mongoose.Schema(
                 mimeType: {
                     type: String,
                     required: true
+                },
+                fileName: {
+                    type: String,
+                    required: true
+
                 }
             },
         }

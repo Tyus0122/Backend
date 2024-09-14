@@ -4,7 +4,7 @@ const postCollection = require("../models/post");
 const commentsCollection = require("../models/comments");
 const _ = require('lodash')
 const { constants } = require("../utils/constants")
-const { uploadFile, getFileMetadata, mongoId } = require("../helpers/s3helper")
+const { uploadFile, getFileMetadata, mongoId, generateUniqueFileName } = require("../helpers/s3helper")
 
 const protectedRoute = async (req, res) => {
     await uploadFile(req.file.originalname, req.file.buffer, req.file.mimetype)
@@ -18,30 +18,32 @@ const Dashboard = async (req, res) => {
 
 const postPost = async (req, res) => {
     try {
-        await uploadFile(req.file.originalname, req.file.buffer, req.file.mimetype)
-        let file = getFileMetadata(req.file)
-        req.body.peopleTagged = JSON.parse(req.body.peopleTagged)
-        req.body.peopleTagged.map((_id) => mongoId(_id))
+        console.log(req.body)
+        const uploadedFiles = await Promise.all(
+            req.files.map(async (file) => {
+                const filename = generateUniqueFileName(file.originalname);
+                await uploadFile(filename, file.buffer, file.mimetype);
+                return getFileMetadata({ ...file, unqFileName: filename });
+            })
+        );
+        req.body.peopleTagged = JSON.parse(req.body.peopleTagged);
+        req.body.peopleTagged = req.body.peopleTagged.map((_id) => mongoId(_id));
         const result = await postCollection.create({
             city: req.body.city,
             peopleTagged: req.body.peopleTagged,
             date: req.body.date,
             time: req.body.time,
             caption: req.body.caption,
-            file: {
-                url: file.url,
-                size: file.size,
-                mimeType: file.mimeType,
-            },
+            files: uploadedFiles,
             posted_by: req.user._id
-        })
-        return new SuccessResponse(res, { message: req.user })
+        });
+        return new SuccessResponse(res, { message: result });
+    } catch (err) {
+        console.log("error in postPost: " + err.message);
+        return new ErrorResponse(err, "error in postPost: ");
     }
-    catch (err) {
-        console.log("error in postPost: " + err.message)
-        return new ErrorResponse(err, "error in postPost: ")
-    }
-}
+};
+
 const likePost = async (req, res) => {
     try {
 
@@ -83,9 +85,9 @@ const commentPost = async (req, res) => {
 const getPosts = async (req, res) => {
     let pipeline = [
         {
-            $match: {
+            $match: {                
                 posted_by: {
-                    $in: req.user.connections
+                    $ne:req.user._id
                 }
             }
         }
@@ -111,7 +113,7 @@ const getPosts = async (req, res) => {
             $match: {
                 post_id: {
                     $in: posts.map(post => post._id)
-                }
+                },
             }
         },
         {
@@ -145,15 +147,15 @@ const getPosts = async (req, res) => {
         output.posts.push({
             posted_by: users[post.posted_by.toString()].username,
             posted_by_city: users[post.posted_by.toString()].city,
-            pic: users[post.posted_by.toString()].pic.url,
+            // pic: users[post.posted_by.toString()].pic.url,
             caption: post.caption,
-            photo: post.file.url,
+            files: post.files,
             liked: liked.has(req.user._id.toString()),
             likescount: post.likescount,
-            commentscount: commentscount[post._id.toString()].comments_count,
+            commentscount: _.isEqual(commentscount, {}) ? 0 : commentscount[post._id.toString()].comments_count,
             post_date: post.date,
             post_time: post.time,
-            post_place:post.city
+            post_place: post.city
         })
     })
     return new SuccessResponse(res, { message: output })

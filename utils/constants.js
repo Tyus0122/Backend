@@ -6,7 +6,7 @@ constants={
   USER_ALREADY_EXISTS:"User already exists",
   ERROR_UPLOADING_FILE:"Error uploading file",
   INVALID_OTP: "Invalid Otp",
-  PAGE_LIMIT:10
+  PAGE_LIMIT:15
 }
 
 
