@@ -3,7 +3,7 @@ const router = express.Router()
 const { loginSubmit, login, signup, signupSubmit, getOtp, postOtp, passwordChange } = require('../controllers/authController')
 const { validateToken, preventValidToken } = require('../middlewares/authMidware')
 const { protectedRoute, Dashboard, postPost, likePost ,commentPost,getPosts} = require('../controllers/DashboardController')
-const {sendConnectionRequest,acceptConnectionRequest,getUsers } = require('../controllers/UserController')
+const {sendConnectionRequest,acceptConnectionRequest,getUsers,getLoggedInUser } = require('../controllers/UserController')
 const { upload } = require("../middlewares/multer")
 
 //Authorization
@@ -27,6 +27,7 @@ router.get('/getPosts', validateToken, getPosts)
 router.post('/sendConnectionRequest', validateToken, sendConnectionRequest)
 router.post('/acceptConnectionRequest', validateToken, acceptConnectionRequest)
 router.get('/getUsers', validateToken, getUsers)
+router.get('/getLoggedInUser', validateToken, getLoggedInUser)
 
 
 module.exports = router

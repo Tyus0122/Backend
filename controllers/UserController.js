@@ -21,10 +21,12 @@ const getUsers = async (req, res) => {
                     _id: {
                         $ne: req.user._id
                     },
-                    username: {
-                        $regex: new RegExp(req.query.search, 'i')
-                    },
-                    accomodation:req.query.available === 'true'
+                    $or: [
+                        { username: { $regex: new RegExp(req.query.search, 'i') } },
+                        { university: { $regex: new RegExp(req.query.search, 'i') } },
+                        { city: { $regex: new RegExp(req.query.search, 'i') } }
+                    ],
+                    accomodation: req.query.available === 'true'
                 }
             },
             {
@@ -38,7 +40,7 @@ const getUsers = async (req, res) => {
                 }
             },
             {
-                $skip:constants.PAGE_LIMIT * parseInt(req.query.page)
+                $skip: constants.PAGE_LIMIT * parseInt(req.query.page)
             },
             {
                 $limit: constants.PAGE_LIMIT
@@ -67,12 +69,12 @@ const getUsers = async (req, res) => {
                     }
                 },
                 {
-                    $skip:constants.PAGE_LIMIT * parseInt(req.query.page)
+                    $skip: constants.PAGE_LIMIT * parseInt(req.query.page)
                 },
                 {
                     $limit: constants.PAGE_LIMIT
                 }
-            ]   
+            ]
         }
         output.users = await userCollection.aggregate(userPipeline)
         if (output.users.length < 5) {
@@ -153,8 +155,32 @@ const acceptConnectionRequest = async (req, res) => {
     }
 }
 
+const getLoggedInUser = async (req, res) => {
+    let output = {}
+    output.fullname = req.user.fullname
+    output.username = req.user.username
+    output.city = req.user.city
+    output.accomodation = req.user.accomodation
+    output.username = req.user.username
+    output.university = req.user.university
+    output.pic = req.user.pic
+    output.bio=req.user.bio
+    output.connectionslength = req.user.connections.length
+    let postsPipeline = [
+        {
+            $match: {
+                posted_by: req.user._id
+            }
+        }
+    ]
+    output.posts = await postCollection.aggregate(postsPipeline)
+
+    return new SuccessResponse(res, { user: output })
+}
+
 module.exports = {
     getUsers,
     sendConnectionRequest,
+    getLoggedInUser,
     acceptConnectionRequest
 }
