@@ -4,7 +4,7 @@ const postCollection = require("../models/post");
 const commentsCollection = require("../models/comments");
 const _ = require('lodash')
 const { constants } = require("../utils/constants")
-const { uploadFile, getFileMetadata, mongoId } = require("../helpers/s3helper")
+const { uploadFile, getFileMetadata, mongoId, generateUniqueFileName } = require("../helpers/s3helper")
 
 const protectedRoute = async (req, res) => {
     await uploadFile(req.file.originalname, req.file.buffer, req.file.mimetype)
@@ -37,6 +37,7 @@ const getUsers = async (req, res) => {
                     connectionRequestssent: 1,
                     connections: 1,
                     username: 1,
+                    pic: 1
                 }
             },
             {
@@ -66,6 +67,7 @@ const getUsers = async (req, res) => {
                         connectionRequestssent: 1,
                         connections: 1,
                         username: 1,
+                        pic: 1
                     }
                 },
                 {
@@ -77,7 +79,7 @@ const getUsers = async (req, res) => {
             ]
         }
         output.users = await userCollection.aggregate(userPipeline)
-        if (output.users.length < 5) {
+        if (output.users.length < constants.PAGE_LIMIT) {
             output.isLastPage = true
         }
         return new SuccessResponse(res, { message: output })
@@ -164,23 +166,128 @@ const getLoggedInUser = async (req, res) => {
     output.username = req.user.username
     output.university = req.user.university
     output.pic = req.user.pic
-    output.bio=req.user.bio
+    output.bio = req.user.bio
     output.connectionslength = req.user.connections.length
     let postsPipeline = [
         {
             $match: {
                 posted_by: req.user._id
             }
+        },
+        {
+            $limit: constants.PAGE_LIMIT
         }
     ]
     output.posts = await postCollection.aggregate(postsPipeline)
 
     return new SuccessResponse(res, { user: output })
 }
+const getLoggedInUserPosts = async (req, res) => {
+    let output = {}
+    output.isLastPage = false
+    let postsPipeline = [
+        {
+            $match: {
+                posted_by: req.user._id
+            }
+        },
+        {
+            $skip: constants.PAGE_LIMIT * parseInt(req.query.page)
+        },
+        {
+            $limit: constants.PAGE_LIMIT
+        }
+    ]
+    output.posts = await postCollection.aggregate(postsPipeline)
+    if (output.posts.length < constants.PAGE_LIMIT) {
+        output.isLastPage = true
+    }
+    return new SuccessResponse(res, { posts: output })
+}
+
+const getUserProfile = async (req, res) => {
+    const userPipeline = [
+        {
+            $match: {
+                _id: mongoId(req.query.user_id)
+            }
+        }
+    ]
+    let output = {}
+    let user = await userCollection.aggregate(userPipeline)
+    user = user[0]
+    output.fullname = user.fullname
+    output.username = user.username
+    output.city = user.city
+    output.accomodation = user.accomodation
+    output.username = user.username
+    output.university = user.university
+    output.pic = user.pic
+    output.bio = user.bio
+    output.connectionslength = user.connections.length
+    output._id = user._id
+    let postsPipeline = [
+        {
+            $match: {
+                posted_by: mongoId(req.query.user_id)
+            }
+        },
+        {
+            $limit: constants.PAGE_LIMIT
+        }
+    ]
+    output.posts = await postCollection.aggregate(postsPipeline)
+
+    return new SuccessResponse(res, { user: output })
+}
+const getUserPosts = async (req, res) => {
+    let output = {}
+    output.isLastPage = false
+    let postsPipeline = [
+        {
+            $match: {
+                posted_by: req.user._id
+            }
+        },
+        {
+            $skip: constants.PAGE_LIMIT * parseInt(req.query.page)
+        },
+        {
+            $limit: constants.PAGE_LIMIT
+        }
+    ]
+    output.posts = await postCollection.aggregate(postsPipeline)
+    if (output.posts.length < constants.PAGE_LIMIT) {
+        output.isLastPage = true
+    }
+    return new SuccessResponse(res, { posts: output })
+}
+ 
+const editProfilePost = async (req, res) => {
+    let user = await userCollection.findOne({ _id: req.user._id })
+    if (req.body.changePic=='true') {
+        const filename = generateUniqueFileName(req.file.originalname);
+        await uploadFile(filename, req.file.buffer, req.file.mimetype);
+        const uploadedFile = getFileMetadata({ ...req.file, unqFileName: filename });
+        user.pic = uploadedFile
+    }
+    user.fullname = req.body.fullname
+    user.username = req.body.username
+    user.bio = req.body.bio
+    user.city = req.body.city
+    user.university = req.body.university
+    user.accomodation = req.body.accomodation
+    await user.save()
+    return new SuccessResponse(res, "hello")
+}
 
 module.exports = {
     getUsers,
     sendConnectionRequest,
     getLoggedInUser,
-    acceptConnectionRequest
+    acceptConnectionRequest,
+    getLoggedInUserPosts,
+    getUserProfile,
+    getUserPosts,
+    editProfilePost
 }

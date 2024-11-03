@@ -46,7 +46,6 @@ const postPost = async (req, res) => {
 
 const likePost = async (req, res) => {
     try {
-
         let post = await postCollection.findOne({ _id: mongoId(req.body.post_id) })
         if (req.body.liked && !post.likes.includes(req.user._id)) {
             post.likes.push(mongoId(req.user._id))
@@ -85,10 +84,90 @@ const commentPost = async (req, res) => {
 const getPosts = async (req, res) => {
     let pipeline = [
         {
-            $match: {                
+            $match: {
                 posted_by: {
-                    $ne:req.user._id
+                    $ne: req.user._id
                 }
+            }
+        }
+    ]
+    let posts = await postCollection.aggregate(pipeline)
+    let userids = posts.map(post => post.posted_by)
+    let userpipeline = [
+        {
+            $match: {
+                _id: {
+                    $in: userids
+                }
+            }
+        }
+    ]
+    let users = await userCollection.aggregate(userpipeline)
+    users = _.keyBy(users, (user) => user._id.toString())
+    let output = {
+        posts: [],
+        logged_in_user: {}
+    }
+    let commentpipeline = [
+        {
+            $match: {
+                post_id: {
+                    $in: posts.map(post => post._id)
+                },
+            }
+        },
+        {
+            $group: {
+                _id: "$post_id",
+                arr: {
+                    $push: {
+                        commentedBy: "$commentedBy"
+                    }
+                }
+            }
+        },
+        {
+            $addFields: {
+                comments_count: {
+                    $size: "$arr"
+                }
+            }
+        },
+    ]
+    let comments = await commentsCollection.aggregate(commentpipeline)
+    _.forEach(comments, (comment) => {
+        comment.commentedByName = new Set()
+        _.forEach(comment.arr, (_id) => {
+            comment.commentedByName.add(users[_id.commentedBy.toString()].fullname)
+        })
+    })
+    let commentscount = _.keyBy(comments, (comment) => comment._id.toString())
+    _.forEach(posts, (post) => {
+        liked = new Set(post.likes.map(liked => liked.toString()))
+        output.posts.push({
+            _id: post._id,
+            posted_by_id: post.posted_by,
+            posted_by: users[post.posted_by.toString()].username,
+            posted_by_city: users[post.posted_by.toString()].city,
+            pic: users[post.posted_by.toString()].pic.url,
+            caption: post.caption,
+            files: post.files,
+            liked: liked.has(req.user._id.toString()),
+            likescount: post.likescount,
+            commentscount: _.isEqual(commentscount, {}) ? 0 : commentscount[post._id.toString()].comments_count,
+            post_date: post.date,
+            post_time: post.time,
+            post_place: post.city,
+        })
+    })
+    output.logged_in_user.pic = req.user.pic
+    return new SuccessResponse(res, { message: output })
+}
+const getsinglepost = async (req, res) => {
+    const pipeline = [
+        {
+            $match: {
+                _id: mongoId(req.query.post)
             }
         }
     ]
@@ -145,9 +224,11 @@ const getPosts = async (req, res) => {
     _.forEach(posts, (post) => {
         liked = new Set(post.likes.map(liked => liked.toString()))
         output.posts.push({
+            _id: post._id,
             posted_by: users[post.posted_by.toString()].username,
+            posted_by_id: post.posted_by,
             posted_by_city: users[post.posted_by.toString()].city,
-            // pic: users[post.posted_by.toString()].pic.url,
+            pic: users[post.posted_by.toString()].pic.url,
             caption: post.caption,
             files: post.files,
             liked: liked.has(req.user._id.toString()),
@@ -166,5 +247,6 @@ module.exports = {
     postPost,
     likePost,
     commentPost,
-    getPosts
+    getPosts,
+    getsinglepost
 }   
