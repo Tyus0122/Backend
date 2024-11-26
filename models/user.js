@@ -87,7 +87,11 @@ let schema = new mongoose.Schema(
 
                 }
             },
-        }
+        },
+        saved_posts: {
+            type: [mongoose.Schema.Types.ObjectId],
+            default: []
+        },
     },
     { timestamps: true }
 );

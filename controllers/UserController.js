@@ -182,6 +182,19 @@ const getLoggedInUser = async (req, res) => {
 
     return new SuccessResponse(res, { user: output })
 }
+const getLoggedInUser_id = async (req, res) => {
+    try {
+        output = {
+            _id: req.user._id
+        }
+        return new SuccessResponse(res, output)
+    }
+    catch (e) {
+        console.log("error in getLoggedInUser_id: ", e.message)
+        return new ErrorResponse(res, "error in getting user_id")
+    }
+}
+
 const getLoggedInUserPosts = async (req, res) => {
     let output = {}
     output.isLastPage = false
@@ -262,10 +275,10 @@ const getUserPosts = async (req, res) => {
     }
     return new SuccessResponse(res, { posts: output })
 }
- 
+
 const editProfilePost = async (req, res) => {
     let user = await userCollection.findOne({ _id: req.user._id })
-    if (req.body.changePic=='true') {
+    if (req.body.changePic == 'true') {
         const filename = generateUniqueFileName(req.file.originalname);
         await uploadFile(filename, req.file.buffer, req.file.mimetype);
         const uploadedFile = getFileMetadata({ ...req.file, unqFileName: filename });
@@ -278,7 +291,7 @@ const editProfilePost = async (req, res) => {
     user.university = req.body.university
     user.accomodation = req.body.accomodation
     await user.save()
-    return new SuccessResponse(res, "hello")
+    return new SuccessResponse(res, "successfully edited")
 }
 
 module.exports = {
@@ -289,5 +302,6 @@ module.exports = {
     getLoggedInUserPosts,
     getUserProfile,
     getUserPosts,
-    editProfilePost
+    editProfilePost,
+    getLoggedInUser_id
 }

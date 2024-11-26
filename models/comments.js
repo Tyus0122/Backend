@@ -10,12 +10,16 @@ let schema = new mongoose.Schema(
             type: String,
             required: true,
         },
-        replyfor:{
+        parent_comment_id:{
             type:mongoose.Schema.Types.ObjectId,
         },
         commentedBy:{
             type:mongoose.Schema.Types.ObjectId,
-        }
+        },
+        likes: {
+            type: [mongoose.Schema.Types.ObjectId],
+            default: []
+        },
     },
     { timestamps: true }
 );

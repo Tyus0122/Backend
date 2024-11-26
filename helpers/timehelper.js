@@ -14,7 +14,21 @@ function formatDate(input) {
     return date.format('DD-MM-YYYY');
   }
 }
+function formatDateForComments(date) {
+  const now = moment();
+  const givenDate = moment(date);
+
+  // Check if the date is today
+  if (now.isSame(givenDate, 'day')) {
+      // Display in hours ago if it's today
+      return `${now.diff(givenDate, 'hours')} h`;
+  } else {
+      // Display in days ago otherwise
+      return `${now.diff(givenDate, 'days')} d`;
+  }
+}
 
 module.exports = {
-    formatDate,
+  formatDate,
+  formatDateForComments
 }
