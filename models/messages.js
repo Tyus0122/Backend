@@ -17,6 +17,10 @@ let schema = new mongoose.Schema(
         time: {
             type: String,
             required: true
+        },
+        type: {
+            type: String,
+            required: true
         }
     },
     { timestamps: true }

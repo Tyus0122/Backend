@@ -68,7 +68,8 @@ const getMessages = async (req, res) => {
                         then: true,
                         else: false
                     }
-                }
+                },
+                type: 1
             }
         },
         {
@@ -181,15 +182,106 @@ const postMessages = async (req, res) => {
         sender_id: req.user._id,
         conversation_id: req.body.conversation_id,
         message: req.body.message,
-        time: req.body.time
+        time: req.body.time,
+        type: req.body.type
     })
     await message.save()
     output.message = message
     return new SuccessResponse(res, output)
 }
+const sharePostService = async (req, res) => {
+    let { type, message, toUserIds } = req.body;
+    if (!type || !message || !toUserIds || !Array.isArray(toUserIds) || toUserIds.length === 0) {
+        return new ErrorResponse(res, "Invalid payload", 400)
+    }
+    const senderId = req.user._id; // Assume `userId` is added to `req` after authentication middleware.
+    try {
+        const bulkOperations = toUserIds.map(async (toUserId) => {
+            const sortedUsers = [senderId, mongoId(toUserId)].sort();
+            const existingConversation = await conversationCollection.findOneAndUpdate(
+                {
+                    users: sortedUsers, // Match exact sorted array
+                },
+                {
+                    $setOnInsert: {
+                        users: sortedUsers, // Insert sorted array if not found
+                    },
+                },
+                { upsert: true, new: true }
+            );
+            const newMessage = new messagesCollection({
+                sender_id: senderId,
+                conversation_id: existingConversation._id,
+                message: message, // Post ID being shared
+                type: type, // 'sharePost'
+                time: new Date().toISOString(),
+            });
+            await newMessage.save();
+            await conversationCollection.findByIdAndUpdate(existingConversation._id, {
+                lastMessage: `Shared a post`,
+                lastMessageTime: new Date(),
+                senderId: senderId,
+            });
+        });
+
+        // Wait for all operations to complete
+        await Promise.all(bulkOperations);
+
+        res.status(200).json({ message: "Post shared successfully" });
+    } catch (error) {
+        console.error("Error sharing post:", error);
+        res.status(500).json({ error: "An error occurred while sharing the post" });
+    }
+}
+const shareProfileService = async (req, res) => {
+    let { type, message, toUserIds } = req.body;
+    if (!type || !message || !toUserIds || !Array.isArray(toUserIds) || toUserIds.length === 0) {
+        return new ErrorResponse(res, "Invalid payload", 400)
+    }
+    const senderId = req.user._id; // Assume `userId` is added to `req` after authentication middleware.
+    try {
+        const bulkOperations = toUserIds.map(async (toUserId) => {
+            const sortedUsers = [senderId, mongoId(toUserId)].sort();
+            const existingConversation = await conversationCollection.findOneAndUpdate(
+                {
+                    users: sortedUsers, // Match exact sorted array
+                },
+                {
+                    $setOnInsert: {
+                        users: sortedUsers, // Insert sorted array if not found
+                    },
+                },
+                { upsert: true, new: true }
+            );
+            const newMessage = new messagesCollection({
+                sender_id: senderId,
+                conversation_id: existingConversation._id,
+                message: message, // Post ID being shared
+                type: type, // 'sharePost'
+                time: new Date().toISOString(),
+            });
+            await newMessage.save();
+            await conversationCollection.findByIdAndUpdate(existingConversation._id, {
+                lastMessage: `Shared a profile`,
+                lastMessageTime: new Date(),
+                senderId: senderId,
+            });
+        });
+
+        // Wait for all operations to complete
+        await Promise.all(bulkOperations);
+
+        res.status(200).json({ message: "Profile shared successfully" });
+    } catch (error) {
+        console.error("Error sharing post:", error);
+        res.status(500).json({ error: "An error occurred while sharing the post" });
+    }
+}
 module.exports = {
     postProfileMessage,
     getMessages,
     postMessages,
-    getConversations
+    getConversations,
+    sharePostService,
+    shareProfileService
 }   

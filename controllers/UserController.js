@@ -91,7 +91,6 @@ const getUsers = async (req, res) => {
 }
 const sendConnectionRequest = async (req, res) => {
     try {
-        console.log(req.body)
         let user = await userCollection.findOne({ _id: req.body.user_id })
         let connectionRequests = new Set(user.connectionRequests.map(obj => obj.toString()))
         let connections = new Set(user.connections.map(obj => obj.toString()))
@@ -156,6 +155,31 @@ const acceptConnectionRequest = async (req, res) => {
         return new ErrorResponse(res, "error in acceptConnectionRequest")
     }
 }
+const rejectConnectionRequest = async (req, res) => {
+    try {
+        let user = await userCollection.findOne({ _id: req.body.user_id })
+        let connectionRequests = new Set(user.connectionRequests.map(obj => obj.toString()))
+        let connections = new Set(user.connections.map(obj => obj.toString()))
+        if (_.isEqual(mongoId(req.body.user_id), req.user._id)) {
+            return new ErrorResponse(res, "not allowed")
+        }
+        if (connections.has(req.user._id.toString())) {
+            return new ErrorResponse(res, "you are already connected")
+        }
+        if (connectionRequests.has(req.user._id.toString())) {
+            return new ErrorResponse(res, "no connection request found")
+        }
+        user.connectionRequestssent = user.connectionRequestssent.filter(_id => !_.isEqual(_id, req.user._id))
+        req.user.connectionRequests = req.user.connectionRequests.filter(_id => !_.isEqual(_id, mongoId(req.body.user_id)))
+        user.save()
+        req.user.save()
+        return new SuccessResponse(res, { message: req.body })
+    }
+    catch (e) {
+        console.log("error in rejectConnectionRequest: ", e.message)
+        return new ErrorResponse(res, "error in rejecting connection request")
+    }
+}
 
 const getLoggedInUser = async (req, res) => {
     let output = {}
@@ -168,6 +192,7 @@ const getLoggedInUser = async (req, res) => {
     output.pic = req.user.pic
     output.bio = req.user.bio
     output.connectionslength = req.user.connections.length
+    output._id = req.user._id
     let postsPipeline = [
         {
             $match: {
@@ -250,7 +275,20 @@ const getUserProfile = async (req, res) => {
         }
     ]
     output.posts = await postCollection.aggregate(postsPipeline)
-
+    output.self = user._id.toString() == req.user._id.toString()
+    let connections = new Set(user.connections.map(id => id.toString()))
+    let connectionRequests = new Set(user.connectionRequests.map(id => id.toString()))
+    let connectionRequestssent = new Set(user.connectionRequestssent.map(id => id.toString()))
+    output.connectionStatus = 'connect'
+    if (connections.has(req.user._id.toString())) {
+        output.connectionStatus = 'connected'
+    }
+    else if (connectionRequests.has(req.user._id.toString())) {
+        output.connectionStatus = 'connecting'
+    }
+    else if (connectionRequestssent.has(req.user._id.toString())) {
+        output.connectionStatus = 'accpet'
+    }
     return new SuccessResponse(res, { user: output })
 }
 const getUserPosts = async (req, res) => {
@@ -293,6 +331,9 @@ const editProfilePost = async (req, res) => {
     await user.save()
     return new SuccessResponse(res, "successfully edited")
 }
+const shareProfleUsers = async (req, res) => {
+
+}
 
 module.exports = {
     getUsers,
@@ -303,5 +344,7 @@ module.exports = {
     getUserProfile,
     getUserPosts,
     editProfilePost,
-    getLoggedInUser_id
+    getLoggedInUser_id,
+    shareProfleUsers,
+    rejectConnectionRequest
 }

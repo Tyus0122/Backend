@@ -1,11 +1,12 @@
 const { SuccessResponse, ErrorResponse } = require('../helpers/response');
 const userCollection = require("../models/user");
 const postCollection = require("../models/post");
+const notificationsCollection = require("../models/notifications");
 const commentsCollection = require("../models/comments");
 const _ = require('lodash')
 const { constants, limitHelper } = require("../utils/constants")
 const { uploadFile, getFileMetadata, mongoId, generateUniqueFileName } = require("../helpers/s3helper")
-const { formatDateForComments } = require("../helpers/timehelper")
+const { formatDateForComments } = require("../helpers/timehelper");
 const commentsFormatHelper = (comments, logged_in_user_id) => {
     output = {
         comments: []
@@ -66,16 +67,28 @@ const postPost = async (req, res) => {
 const likePost = async (req, res) => {
     try {
         let post = await postCollection.findOne({ _id: mongoId(req.body.post_id) })
+        let newnotification;
         if (req.body.liked && !post.likes.includes(req.user._id)) {
             post.likes.push(mongoId(req.user._id))
             post.likescount += 1
+            newnotification = new notificationsCollection({
+                notification_text: `${req.user.username} liked your post`,
+                post_id: req.body.post_id,
+                notification_raised_by: req.user._id
+            })
         }
         else if (!req.body.liked && post.likes.includes(req.user._id)) {
             post.likescount -= 1
             post.likes = post.likes.filter(_id =>
                 !_.isEqual(_id, req.user._id)
             );
+            newnotification = new notificationsCollection({
+                notification_text: `${req.user.username} disliked your post`,
+                post_id: req.body.post_id,
+                notification_raised_by: req.user._id
+            })
         }
+        await newnotification.save()
         await post.save()
         return new SuccessResponse(res, { message: "success" })
     }
@@ -91,6 +104,11 @@ const commentPost = async (req, res) => {
             comment: req.body.comment,
             parent_comment_id: req.body.parent_comment_id,
             commentedBy: req.user._id
+        })
+        let newnotification = await notificationsCollection.create({
+            notification_text: `${req.user.username} commented your post`,
+            post_id: req.body.post_id,
+            notification_raised_by: req.user._id
         })
         output = {
             _id: result._id,
@@ -375,7 +393,7 @@ const getPosts = async (req, res) => {
     ]
     output.shareUsers = await userCollection.aggregate(shareUsersPipeline)
     output.shareIsLastPage = output.shareUsers.length < constants.PAGE_LIMIT ? true : false
-    output.sharePageLimit= constants.PAGE_LIMIT
+    output.sharePageLimit = constants.PAGE_LIMIT
     return new SuccessResponse(res, { message: output })
 }
 const getsinglepost = async (req, res) => {
@@ -518,6 +536,30 @@ const getsinglepost = async (req, res) => {
     output.logged_in_user.city = req.user.city
     output.isLastPage = output.posts.length < constants.PAGE_LIMIT ? true : false
     output.comments = realcomments
+    let shareUsersPipeline = [
+        {
+            $match: {
+                _id: {
+                    $ne: req.user._id
+                }
+            }
+        },
+        {
+            $project: {
+                _id: 1,
+                pic: 1,
+                city: 1,
+                fullname: 1,
+                username: 1
+            }
+        },
+        {
+            $limit: constants.PAGE_LIMIT
+        }
+    ]
+    output.shareUsers = await userCollection.aggregate(shareUsersPipeline)
+    output.shareIsLastPage = output.shareUsers.length < constants.PAGE_LIMIT ? true : false
+    output.sharePageLimit = constants.PAGE_LIMIT
     return new SuccessResponse(res, { message: output })
 }
 const likeComment = async (req, res) => {
