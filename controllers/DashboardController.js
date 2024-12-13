@@ -74,7 +74,8 @@ const likePost = async (req, res) => {
             newnotification = new notificationsCollection({
                 notification_text: `${req.user.username} liked your post`,
                 post_id: req.body.post_id,
-                notification_raised_by: req.user._id
+                notification_raised_by: req.user._id,
+                notification_for: post.posted_by
             })
         }
         else if (!req.body.liked && post.likes.includes(req.user._id)) {
@@ -85,7 +86,8 @@ const likePost = async (req, res) => {
             newnotification = new notificationsCollection({
                 notification_text: `${req.user.username} disliked your post`,
                 post_id: req.body.post_id,
-                notification_raised_by: req.user._id
+                notification_raised_by: req.user._id,
+                notification_for: post.posted_by
             })
         }
         await newnotification.save()
@@ -105,10 +107,12 @@ const commentPost = async (req, res) => {
             parent_comment_id: req.body.parent_comment_id,
             commentedBy: req.user._id
         })
+        const post = await postCollection.findOne({ _id: mongoId(req.body.post_id) })
         let newnotification = await notificationsCollection.create({
             notification_text: `${req.user.username} commented your post`,
             post_id: req.body.post_id,
-            notification_raised_by: req.user._id
+            notification_raised_by: req.user._id,
+            notification_for: post.posted_by
         })
         output = {
             _id: result._id,

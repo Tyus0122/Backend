@@ -13,6 +13,9 @@ let schema = new mongoose.Schema(
         post_id: {
             type: mongoose.Schema.Types.ObjectId,
         },
+        notification_for: {
+            type: mongoose.Schema.Types.ObjectId,
+        }
         // comment_id: {
         //     type: mongoose.Schema.Types.ObjectId
         // }
