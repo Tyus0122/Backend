@@ -35,7 +35,6 @@ const signup = async (req, res) => {
 }
 
 const signupSubmit = async (req, res) => {
-    console.log(req.body)
     try {
         let user = await userCollection.findOne({ email: req.body.email })
         if (!_.isNil(user)) {

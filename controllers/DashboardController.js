@@ -236,8 +236,10 @@ const getPosts = async (req, res) => {
         {
             $match: {
                 posted_by: {
-                    $ne: req.user._id
-                }
+                    $nin: [req.user._id, ...req.user.blocked_users]
+                },
+                city: { $regex: new RegExp(req.query.search, 'i') },
+                date: { $regex: new RegExp(req.query.date, 'i') }
             }
         },
         ...limitHelper(req.query.page)
@@ -563,6 +565,7 @@ const getsinglepost = async (req, res) => {
     ]
     output.shareUsers = await userCollection.aggregate(shareUsersPipeline)
     output.shareIsLastPage = output.shareUsers.length < constants.PAGE_LIMIT ? true : false
+    output.selfPost = _.isEqual(posts[0].posted_by,req.user._id)
     output.sharePageLimit = constants.PAGE_LIMIT
     return new SuccessResponse(res, { message: output })
 }

@@ -51,6 +51,10 @@ let schema = new mongoose.Schema(
             type: [mongoose.Schema.Types.ObjectId],
             default: []
         },
+        blocked_users: {
+            type: [mongoose.Schema.Types.ObjectId],
+            default: []
+        },
         city: {
             type: String,
             default: "N-A"

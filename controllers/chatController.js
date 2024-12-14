@@ -5,7 +5,7 @@ const conversationCollection = require("../models/conversation");
 const messagesCollection = require("../models/messages");
 const commentsCollection = require("../models/comments");
 const _ = require('lodash')
-const { constants } = require("../utils/constants")
+const { constants, limitHelper } = require("../utils/constants")
 const { uploadFile, getFileMetadata, mongoId } = require("../helpers/s3helper")
 const { formatDate } = require("../helpers/timehelper")
 
@@ -116,11 +116,9 @@ const getConversations = async (req, res) => {
                                 input: "$users",
                                 as: "userId",
                                 cond: {
-                                    $ne: [
-                                        "$$userId",
-                                        mongoId(
-                                            req.user._id
-                                        )
+                                    $and: [
+                                        { $ne: ["$$userId", mongoId(req.user._id)] }, // Exclude the current user
+                                        { $not: { $in: ["$$userId", req.user.blocked_users] } } // Exclude blocked users
                                     ]
                                 }
                             }
@@ -147,12 +145,6 @@ const getConversations = async (req, res) => {
             }
         },
         {
-            $skip: constants.PAGE_LIMIT * parseInt(req.query.page)
-        },
-        {
-            $limit: constants.PAGE_LIMIT
-        },
-        {
             $project: {
                 otherUser_id: "$otherUser._id",
                 fullname: "$otherUser.fullname",
@@ -162,7 +154,13 @@ const getConversations = async (req, res) => {
                 lastMessage: "$lastMessage",
                 lastMessageTime: "$lastMessageTime"
             }
-        }
+        },
+        {
+            $sort: {
+                lastMessageTime: -1
+            }
+        },
+        ...limitHelper(req.query.page)
     ]
     output.conversations = await conversationCollection.aggregate(conversationsPipeline)
     output.conversations.map(conversation => conversation.lastMessageTime = formatDate(conversation.lastMessageTime))

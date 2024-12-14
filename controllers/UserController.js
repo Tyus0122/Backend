@@ -3,7 +3,8 @@ const userCollection = require("../models/user");
 const postCollection = require("../models/post");
 const commentsCollection = require("../models/comments");
 const _ = require('lodash')
-const { constants } = require("../utils/constants")
+const bcrypt = require('bcrypt');
+const { constants, limitHelper } = require("../utils/constants")
 const { uploadFile, getFileMetadata, mongoId, generateUniqueFileName } = require("../helpers/s3helper")
 
 const protectedRoute = async (req, res) => {
@@ -19,7 +20,7 @@ const getUsers = async (req, res) => {
             {
                 $match: {
                     _id: {
-                        $ne: req.user._id
+                        $nin: [req.user._id, ...req.user.blocked_users]
                     },
                     $or: [
                         { username: { $regex: new RegExp(req.query.search, 'i') } },
@@ -121,6 +122,27 @@ const sendConnectionRequest = async (req, res) => {
             }
         }
         return new SuccessResponse(res, { message: "success" })
+    }
+    catch (e) {
+        console.log("error in sendConnectionRequest: ", e.message)
+        return new ErrorResponse(res, "error in sendConnectionRequest")
+    }
+}
+const removeConnection = async (req, res) => {
+    try {
+        let user = await userCollection.findOne({ _id: req.body.user_id })
+        let connections = new Set(user.connections.map(obj => obj.toString()))
+        let myconnections = new Set(req.user.connections.map(obj => obj.toString()))
+        if (connections.has(req.user._id.toString()) && myconnections.has(req.body.user_id.toString())) {
+            user.connections = user.connections.filter(_id => !_.isEqual(_id, req.user._id))
+            req.user.connections = req.user.connections.filter(_id => !_.isEqual(_id, mongoId(req.body.user_id)))
+            user.save()
+            req.user.save()
+            return new SuccessResponse(res, { message: "success" })
+        }
+        else {
+            return new ErrorResponse(res, "no connection found")
+        }
     }
     catch (e) {
         console.log("error in sendConnectionRequest: ", e.message)
@@ -292,26 +314,32 @@ const getUserProfile = async (req, res) => {
     return new SuccessResponse(res, { user: output })
 }
 const getUserPosts = async (req, res) => {
-    let output = {}
-    output.isLastPage = false
-    let postsPipeline = [
-        {
-            $match: {
-                posted_by: req.user._id
+    try {
+        let output = {}
+        output.isLastPage = false
+        let postsPipeline = [
+            {
+                $match: {
+                    posted_by: mongoId(req.query.user_id),
+                }
+            },
+            {
+                $skip: constants.PAGE_LIMIT * parseInt(req.query.page)
+            },
+            {
+                $limit: constants.PAGE_LIMIT
             }
-        },
-        {
-            $skip: constants.PAGE_LIMIT * parseInt(req.query.page)
-        },
-        {
-            $limit: constants.PAGE_LIMIT
+        ]
+        output.posts = await postCollection.aggregate(postsPipeline)
+        if (output.posts.length < constants.PAGE_LIMIT) {
+            output.isLastPage = true
         }
-    ]
-    output.posts = await postCollection.aggregate(postsPipeline)
-    if (output.posts.length < constants.PAGE_LIMIT) {
-        output.isLastPage = true
+        return new SuccessResponse(res, { posts: output })
     }
-    return new SuccessResponse(res, { posts: output })
+    catch (e) {
+        console.log(e.message)
+        return new ErrorResponse(res, "error in getting user posts")
+    }
 }
 
 const editProfilePost = async (req, res) => {
@@ -335,6 +363,79 @@ const shareProfleUsers = async (req, res) => {
 
 }
 
+const blockUser = async (req, res) => {
+    try {
+        output = {}
+        if (req.body.block) {
+            req.user.blocked_users.push(mongoId(req.body.user_id))
+            req.user.save()
+        }
+        else if (!req.body.block) {
+            req.user.blocked_users = req.user.blocked_users.filter(_id =>
+                !_.isEqual(_id, mongoId(req.body.user_id))
+            )
+            req.user.save()
+        }
+        return new SuccessResponse(res, { message: "success" })
+    }
+    catch (e) {
+        console.log("error in blockUser: ", e.message)
+        return new ErrorResponse(res, "error in blocking user")
+    }
+}
+
+const getBlockedUsers = async (req, res) => {
+    try {
+        output = {}
+        let pipeline = [
+            {
+                $match: {
+                    _id: {
+                        $in: req.user.blocked_users
+                    }
+                }
+            },
+            {
+                $project: {
+                    _id: 1,
+                    pic: 1,
+                    city: 1,
+                    username: 1
+                }
+            },
+            ...limitHelper(req.query.page)
+        ]
+        output.suggestions = await userCollection.aggregate(pipeline)
+        output.isLastPage = output.suggestions.length < constants.PAGE_LIMIT ? true : false
+        return new SuccessResponse(res, { ...output })
+    }
+    catch (e) {
+        console.log("error in blockUser: ", e.message)
+        return new ErrorResponse(res, "error in blocking user")
+    }
+}
+
+const changeCurrentPassword = async (req, res) => {
+    try {
+        output = {}
+        if (req.body.current_password == req.user.password) {
+            let hashPassword = await bcrypt.hash(req.body.new_password, constants.SALT_ROUNDS)
+            req.user.hashPassword = hashPassword
+            req.user.save()
+            output.message = 'ok'
+            return new SuccessResponse(res, output)
+        }
+        else {
+            output.err = 'Invalid password'
+            return new SuccessResponse(res, output)
+        }
+    }
+    catch (e) {
+        console.log("error in blockUser: ", e.message)
+        return new ErrorResponse(res, "error in blocking user")
+    }
+}
+
 module.exports = {
     getUsers,
     sendConnectionRequest,
@@ -346,5 +447,9 @@ module.exports = {
     editProfilePost,
     getLoggedInUser_id,
     shareProfleUsers,
-    rejectConnectionRequest
+    rejectConnectionRequest,
+    blockUser,
+    getBlockedUsers,
+    removeConnection,
+    changeCurrentPassword
 }

@@ -107,7 +107,6 @@ const getNotifications = async (req, res) => {
 const getSuggestions = async (req, res) => {
     try {
         let output = {}
-        console.log(req.query)
         let pipeline = [
             {
                 $match: {
@@ -138,7 +137,6 @@ const getSuggestions = async (req, res) => {
 const getRequests = async (req, res) => {
     try {
         let output = {}
-        console.log(req.query)
         let pipeline = [
             {
                 $match: {
@@ -166,8 +164,66 @@ const getRequests = async (req, res) => {
         return new ErrorResponse(res, "Failed to get suggestions", 500)
     }
 }
+
+const getLastDays = async (req, res) => {
+    try {
+        let output = {}
+        let pipeline = [
+            {
+                $match: {
+                    notification_for: req.user._id
+                }
+            },
+            {
+                $sort: {
+                    createdAt: -1
+                }
+            },
+            {
+                $lookup: {
+                    from: "posts",
+                    localField: "post_id",
+                    foreignField: "_id",
+                    as: "result"
+                }
+            },
+            {
+                $lookup: {
+                    from: "users",
+                    localField: "notification_raised_by",
+                    foreignField: "_id",
+                    as: "user"
+                }
+            },
+            {
+                $project: {
+                    notification: "$notification_text",
+                    time: "$createdAt",
+                    pic: { $arrayElemAt: [{ $arrayElemAt: ["$result.files", 0] }, 0] }, // Extract the first element of the array
+                    userPic: { $arrayElemAt: ["$user.pic", 0] } // Extract the first element of the array
+                }
+            },
+            ...limitHelper(req.query.page)
+        ]
+        output.notifications = await notificationsCollection.aggregate(pipeline)
+        output.notifications = output.notifications.map(item => {
+            return {
+                ...item, // Spread the existing properties of the item
+                time: formatDateForComments(item.time), // Update the time field
+            };
+        });
+        output.isLastPage = output.notifications.length < constants.PAGE_LIMIT ? true : false
+        return new SuccessResponse(res, { ...output })
+    }
+    catch (error) {
+        console.log(error.message)
+        return new ErrorResponse(res, "Failed to get suggestions", 500)
+    }
+}
+
 module.exports = {
     getNotifications,
     getSuggestions,
-    getRequests
+    getRequests,
+    getLastDays
 }   

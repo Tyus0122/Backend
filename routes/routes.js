@@ -3,8 +3,8 @@ const router = express.Router()
 const { loginSubmit, login, signup, signupSubmit, getOtp, postOtp, passwordChange } = require('../controllers/authController')
 const { validateToken, preventValidToken } = require('../middlewares/authMidware')
 const { protectedRoute, Dashboard, postPost, likePost, getCommentReplies, commentPost, getPosts, getsinglepost, savePost, getComments, likeComment, getSavedPosts } = require('../controllers/DashboardController')
-const { getNotifications,getSuggestions ,getRequests} = require('../controllers/notificationsController')
-const { rejectConnectionRequest, sendConnectionRequest, shareProfleUsers, acceptConnectionRequest, getUsers, getLoggedInUser, getLoggedInUser_id, getLoggedInUserPosts, getUserProfile, getUserPosts, editProfilePost } = require('../controllers/UserController')
+const { getNotifications, getSuggestions, getRequests, getLastDays } = require('../controllers/notificationsController')
+const { changeCurrentPassword, removeConnection, getBlockedUsers, blockUser, rejectConnectionRequest, sendConnectionRequest, shareProfleUsers, acceptConnectionRequest, getUsers, getLoggedInUser, getLoggedInUser_id, getLoggedInUserPosts, getUserProfile, getUserPosts, editProfilePost } = require('../controllers/UserController')
 const { postProfileMessage, getMessages, postMessages, getConversations, sharePostService, shareProfileService } = require('../controllers/chatController')
 const { upload } = require("../middlewares/multer")
 
@@ -45,7 +45,10 @@ router.get('/getUserPosts', validateToken, getUserPosts)
 router.post('/editProfilePost', validateToken, upload.single('file'), editProfilePost)
 router.post('/sharePostService', validateToken, sharePostService)
 router.post('/shareProfileService', validateToken, shareProfileService)
-
+router.post('/blockUser', validateToken, blockUser)
+router.get('/getBlockedUsers', validateToken, getBlockedUsers)
+router.post('/changeCurrentPassword', validateToken, changeCurrentPassword)
+router.post('/removeConnection', validateToken, removeConnection)
 
 
 
@@ -61,6 +64,7 @@ router.post('/postMessages', validateToken, postMessages)
 router.get('/getNotifications', validateToken, getNotifications)
 router.get('/getSuggestions', validateToken, getSuggestions)
 router.get('/getRequests', validateToken, getRequests)
+router.get('/getLastDays', validateToken, getLastDays)
 
 
 module.exports = router
