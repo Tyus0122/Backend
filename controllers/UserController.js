@@ -218,8 +218,9 @@ const getLoggedInUser = async (req, res) => {
     let postsPipeline = [
         {
             $match: {
-                posted_by: req.user._id
-            }
+                posted_by: req.user._id,
+                is_deleted: { $ne: true }
+            },
         },
         {
             $limit: constants.PAGE_LIMIT
@@ -248,7 +249,8 @@ const getLoggedInUserPosts = async (req, res) => {
     let postsPipeline = [
         {
             $match: {
-                posted_by: req.user._id
+                posted_by: req.user._id,
+                is_deleted: { $ne: true }
             }
         },
         {
@@ -289,7 +291,13 @@ const getUserProfile = async (req, res) => {
     let postsPipeline = [
         {
             $match: {
-                posted_by: mongoId(req.query.user_id)
+                posted_by: mongoId(req.query.user_id),
+                is_deleted: { $ne: true }
+            }
+        },
+        {
+            $sort: {
+                createdAt: -1
             }
         },
         {
@@ -321,6 +329,7 @@ const getUserPosts = async (req, res) => {
             {
                 $match: {
                     posted_by: mongoId(req.query.user_id),
+                    is_deleted: { $ne: true }
                 }
             },
             {

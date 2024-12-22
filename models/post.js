@@ -54,6 +54,14 @@ let schema = new mongoose.Schema(
         posted_by: {
             type: mongoose.Schema.Types.ObjectId,
             required: true
+        },
+        is_deleted: {
+            type: Boolean,
+            default: false
+        },
+        turn_off_comments: {
+            type: Boolean,
+            default: false
         }
     },
     { timestamps: true }

@@ -77,7 +77,6 @@ const getMessages = async (req, res) => {
         }
     ]
     output.messages = await messagesCollection.aggregate(messagesPipeline)
-    output.show_profile = output.messages.length < 10 ? true : false
     const usersPipeline = [
         {
             $match: {

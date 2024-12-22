@@ -34,7 +34,7 @@ const protectedRoute = async (req, res) => {
 
 
 const Dashboard = async (req, res) => {
-    return new SuccessResponse(res, { message: "dashboard" })
+    return new SuccessResponse(res, { message: req.user })
 }
 
 const postPost = async (req, res) => {
@@ -66,7 +66,7 @@ const postPost = async (req, res) => {
 
 const likePost = async (req, res) => {
     try {
-        let post = await postCollection.findOne({ _id: mongoId(req.body.post_id) })
+        let post = await postCollection.findOne({ _id: mongoId(req.body.post_id), is_deleted: { $ne: true } })
         let newnotification;
         if (req.body.liked && !post.likes.includes(req.user._id)) {
             post.likes.push(mongoId(req.user._id))
@@ -101,13 +101,16 @@ const likePost = async (req, res) => {
 }
 const commentPost = async (req, res) => {
     try {
+        const post = await postCollection.findOne({ _id: mongoId(req.body.post_id), is_deleted: { $ne: true } })
+        if (post.turn_off_comments) {
+            return new ErrorResponse(res, "Comments are turned off for this post")
+        }
         const result = await commentsCollection.create({
             post_id: mongoId(req.body.post_id),
             comment: req.body.comment,
             parent_comment_id: req.body.parent_comment_id,
             commentedBy: req.user._id
         })
-        const post = await postCollection.findOne({ _id: mongoId(req.body.post_id) })
         let newnotification = await notificationsCollection.create({
             notification_text: `${req.user.username} commented your post`,
             post_id: req.body.post_id,
@@ -235,6 +238,9 @@ const getPosts = async (req, res) => {
     let pipeline = [
         {
             $match: {
+                is_deleted: {
+                    $ne: true
+                },
                 posted_by: {
                     $nin: [req.user._id, ...req.user.blocked_users]
                 },
@@ -358,6 +364,7 @@ const getPosts = async (req, res) => {
             _id: post._id,
             saved: req.user.saved_posts.includes(mongoId(post._id)),
             posted_by_id: post.posted_by,
+            turn_off_comments: post.turn_off_comments ? true : false,
             posted_by: users[post.posted_by.toString()].username,
             posted_by_city: users[post.posted_by.toString()].city,
             pic: users[post.posted_by.toString()].pic.url,
@@ -406,7 +413,10 @@ const getsinglepost = async (req, res) => {
     const pipeline = [
         {
             $match: {
-                _id: mongoId(req.query.post)
+                _id: mongoId(req.query.post),
+                is_deleted: {
+                    $ne: true
+                }
             }
         }
     ]
@@ -526,6 +536,8 @@ const getsinglepost = async (req, res) => {
             posted_by_id: post.posted_by,
             posted_by: users[post.posted_by.toString()].username,
             posted_by_city: users[post.posted_by.toString()].city,
+            turn_off_comments: post.turn_off_comments ? true : false,
+            is_deleted: post.is_deleted ? true : false,
             pic: users[post.posted_by.toString()].pic.url,
             caption: post.caption,
             files: post.files,
@@ -565,7 +577,7 @@ const getsinglepost = async (req, res) => {
     ]
     output.shareUsers = await userCollection.aggregate(shareUsersPipeline)
     output.shareIsLastPage = output.shareUsers.length < constants.PAGE_LIMIT ? true : false
-    output.selfPost = _.isEqual(posts[0].posted_by,req.user._id)
+    output.selfPost = _.isEqual(posts[0].posted_by, req.user._id)
     output.sharePageLimit = constants.PAGE_LIMIT
     return new SuccessResponse(res, { message: output })
 }
@@ -618,7 +630,8 @@ const getSavedPosts = async (req, res) => {
     postPipeline = [
         {
             $match: {
-                _id: { $in: req.user.saved_posts }
+                _id: { $in: req.user.saved_posts },
+                is_deleted: { $ne: true }
             },
         },
         {
@@ -633,6 +646,135 @@ const getSavedPosts = async (req, res) => {
     output.posts = await postCollection.aggregate(postPipeline)
     return new SuccessResponse(res, { ...output })
 }
+
+const turnComments = async (req, res) => {
+    try {
+        output = {}
+        output.message = 'hello world'
+        const postPipeline = [
+            {
+                $match: {
+                    posted_by: req.user._id,
+                    _id: mongoId(req.body.post_id),
+                    is_deleted: { $ne: true }
+                }
+            }
+        ];
+
+        const postObj = await postCollection.aggregate(postPipeline);
+
+        if (!postObj.length) {
+            return res.status(404).json({ error: "Post not found or already deleted" });
+        }
+        const updateResult = await postCollection.updateOne(
+            {
+                _id: mongoId(req.body.post_id),
+                posted_by: req.user._id,
+            },
+            {
+                $set: { turn_off_comments: req.body.turn },
+            }
+        );
+        return new SuccessResponse(res, { ...output })
+    }
+    catch (err) {
+        console.log("error in turnComments: " + err.message);
+        return new ErrorResponse(res, "error in turnComments: ");
+    }
+}
+const deletePost = async (req, res) => {
+    try {
+        let output = {}
+        const updateResult = await postCollection.updateOne(
+            {
+                _id: mongoId(req.body.post_id),
+                posted_by: req.user._id,
+            },
+            {
+                $set: { is_deleted: true },
+            }
+        );
+        return new SuccessResponse(res, { ...output })
+    }
+    catch (err) {
+        console.log("error in deletePost: " + err.message);
+        return new ErrorResponse(res, "error in deletePost: ");
+    }
+}
+const getEditPost = async (req, res) => {
+    try {
+        output = {}
+        let postPipeline = [
+            {
+                $match: {
+                    _id: mongoId(req.query.post_id),
+                    posted_by: req.user._id,
+                    is_deleted: { $ne: true }
+                }
+            },
+            {
+                $project: {
+                    caption: 1,
+                    city: 1,
+                    date: 1,
+                    time: 1,
+                    files: 1,
+                    peopleTagged: 1,
+                }
+            }
+        ]
+        output.post = await postCollection.aggregate(postPipeline)
+        return new SuccessResponse(res, { ...output })
+    }
+    catch (err) {
+        console.log("error in getEditPost: " + err.message);
+        return new ErrorResponse(res, "error in getEditPost: ");
+    }
+}
+
+const postEditPost = async (req, res) => {
+    try {
+        // Upload and process files
+        const uploadedFiles = await Promise.all(
+            req.files.map(async (file) => {
+                const filename = generateUniqueFileName(file.originalname);
+                await uploadFile(filename, file.buffer, file.mimetype);
+                return getFileMetadata({ ...file, unqFileName: filename });
+            })
+        );
+        req.body.peopleTagged = JSON.parse(req.body.peopleTagged);
+        req.body.peopleTagged = req.body.peopleTagged.map((_id) => mongoId(_id));
+        const { _id } = req.body;
+        if (!_id) {
+            return new ErrorResponse(res, "Document ID (_id) is required.");
+        }
+        const result = await postCollection.findByIdAndUpdate(
+            { _id: mongoId(req.body._id) },
+            {
+                city: req.body.city,
+                peopleTagged: req.body.peopleTagged,
+                date: req.body.date,
+                time: req.body.time,
+                caption: req.body.caption,
+                files: uploadedFiles,
+                posted_by: req.user._id
+            },
+            { new: true, upsert: false } // Return the updated document, do not create a new one
+        );
+
+        // Check if the document was found and updated
+        if (!result) {
+            return new ErrorResponse(res, "Document not found or failed to update.");
+        }
+
+        // Respond with success
+        return new SuccessResponse(res, { message: "Post updated successfully", data: result });
+    } catch (err) {
+        console.error("error in postEditPost: " + err.message);
+        return new ErrorResponse(res, "error in postEditPost: " + err.message);
+    }
+};
+
 module.exports = {
     protectedRoute,
     Dashboard,
@@ -645,5 +787,9 @@ module.exports = {
     getComments,
     likeComment,
     getCommentReplies,
-    getSavedPosts
+    getSavedPosts,
+    turnComments,
+    deletePost,
+    getEditPost,
+    postEditPost
 }   
