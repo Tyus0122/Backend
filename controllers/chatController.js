@@ -7,7 +7,8 @@ const commentsCollection = require("../models/comments");
 const _ = require('lodash')
 const { constants, limitHelper } = require("../utils/constants")
 const { uploadFile, getFileMetadata, mongoId } = require("../helpers/s3helper")
-const { formatDate } = require("../helpers/timehelper")
+const { formatDate } = require("../helpers/timehelper");
+const { request } = require('express');
 
 function getAnotherId(arr, _id) {
     return arr.filter(id => id !== _id.toString())[0]
@@ -43,6 +44,68 @@ const postProfileMessage = async (req, res) => {
 }
 
 const getMessages = async (req, res) => {
+    try {
+        const conversation_id = mongoId(req.query.conversation_id)
+        const otherUser_id = mongoId(req.query.otherUser_id)
+        let output = {}
+        const messagesPipeline = [
+            {
+                $match: {
+                    conversation_id: conversation_id
+                },
+
+            },
+            {
+                $sort: {
+                    createdAt: -1
+                }
+            },
+            {
+                $project: {
+                    message: 1,
+                    time: "$createdAt",
+                    isSender: {
+                        $cond: {
+                            if: { $eq: ["$sender_id", req.user._id] },
+                            then: true,
+                            else: false
+                        }
+                    },
+                    type: 1,
+                    is_deleted: {
+                        $cond: {
+                            if: { $eq: ["$is_deleted", true] },
+                            then: true,
+                            else: false
+                        }
+                    }
+                }
+            },
+            ...limitHelper(req.query.page)
+        ]
+        output.messages = await messagesCollection.aggregate(messagesPipeline)
+        const usersPipeline = [
+            {
+                $match: {
+                    _id: otherUser_id
+                }
+            }
+        ]
+        const otherUser = await userCollection.aggregate(usersPipeline)
+        output.pic = otherUser[0].pic
+        output.fullname = otherUser[0].fullname
+        output.username = otherUser[0].username
+        output._id = otherUser[0]._id
+        output.isLastPage = output.messages.length < constants.PAGE_LIMIT ? true : false
+        output.logged_in_user_id = req.user._id
+        return new SuccessResponse(res, output)
+    }
+    catch (error) {
+        console.error('error in get messages', error.message)
+        return new ErrorResponse(res, error.message, 500)
+    }
+}
+const getAllMessages = async (req, res) => {
     const conversation_id = mongoId(req.query.conversation_id)
     const otherUser_id = mongoId(req.query.otherUser_id)
     let output = {}
@@ -69,11 +132,15 @@ const getMessages = async (req, res) => {
                         else: false
                     }
                 },
-                type: 1
+                type: 1,
+                is_deleted: {
+                    $cond: {
+                        if: { $eq: ["$is_deleted", true] },
+                        then: true,
+                        else: false
+                    }
+                }
             }
-        },
-        {
-            $limit: 20
         }
     ]
     output.messages = await messagesCollection.aggregate(messagesPipeline)
@@ -89,9 +156,31 @@ const getMessages = async (req, res) => {
     output.fullname = otherUser[0].fullname
     output.username = otherUser[0].username
     output._id = otherUser[0]._id
+    output.isLastPage = output.messages.length < constants.PAGE_LIMIT ? true : false
     output.logged_in_user_id = req.user._id
     return new SuccessResponse(res, output)
 }
+const deleteConversation = async (req, res) => {
+    try {
+        if (!req.body.conversation_id) {
+            return new ErrorResponse(res, "Conversation ID is required", 400);
+        }
+        const conversationId = mongoId(req.body.conversation_id);
+        const conversationResult = await conversationCollection.deleteOne({ _id: conversationId });
+        const messagesResult = await messagesCollection.updateMany(
+            { conversation_id: conversationId }, // Use the appropriate field for filtering
+            { $set: { is_deleted: true } } // Proper syntax for $set
+        );
+        const response = {
+            conversationDeleted: conversationResult.deletedCount,
+            messagesUpdated: messagesResult.modifiedCount,
+        };
+        return new SuccessResponse(res, response);
+    } catch (error) {
+        console.error("deleteConversation Error: ", error.message);
+        return new ErrorResponse(res, "Failed to delete conversation", 500);
+    }
+};
 
 const getConversations = async (req, res) => {
     let output = {}
@@ -169,22 +258,29 @@ const getConversations = async (req, res) => {
 
 
 const postMessages = async (req, res) => {
-    output = {}
-    const conversation = await conversationCollection.findOne({ _id: req.body.conversation_id })
-    conversation.lastMessage = req.body.message
-    conversation.senderId = req.user._id
-    conversation.lastMessageTime = req.body.time
-    await conversation.save();
-    const message = new messagesCollection({
-        sender_id: req.user._id,
-        conversation_id: req.body.conversation_id,
-        message: req.body.message,
-        time: req.body.time,
-        type: req.body.type
-    })
-    await message.save()
-    output.message = message
-    return new SuccessResponse(res, output)
+    try {
+        output = {}
+        console.log(req.body)
+        const conversation = await conversationCollection.findOne({ _id: req.body.conversation_id })
+        conversation.lastMessage = req.body.message
+        conversation.senderId = req.user._id
+        conversation.lastMessageTime = req.body.time
+        await conversation.save();
+        const message = new messagesCollection({
+            sender_id: req.user._id,
+            conversation_id: req.body.conversation_id,
+            message: req.body.message,
+            time: req.body.time,
+            type: req.body.type
+        })
+        await message.save()
+        output.message = message
+        return new SuccessResponse(res, output)
+    }
+    catch (error) {
+        console.error("postMessages Error: ", error.message);
+        return new ErrorResponse(res, "Failed to send message", 500);
+    }
 }
 const sharePostService = async (req, res) => {
     let { type, message, toUserIds } = req.body;
@@ -280,5 +376,7 @@ module.exports = {
     postMessages,
     getConversations,
     sharePostService,
-    shareProfileService
+    shareProfileService,
+    deleteConversation,
+    getAllMessages
 }   

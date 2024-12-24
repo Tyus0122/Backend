@@ -4,7 +4,7 @@ let schema = new mongoose.Schema(
     {
         sender_id: {
             type: mongoose.Schema.Types.ObjectId,
-            required: true
+            required: false
         },
         conversation_id: {
             type: mongoose.Schema.Types.ObjectId,
@@ -16,11 +16,15 @@ let schema = new mongoose.Schema(
         },
         time: {
             type: String,
-            required: true
+            required: false
         },
         type: {
             type: String,
             required: true
+        },
+        is_deleted: {
+            type: Boolean,
+            default: false
         }
     },
     { timestamps: true }

@@ -5,9 +5,18 @@ const { validateToken, preventValidToken } = require('../middlewares/authMidware
 const { postEditPost, getEditPost, deletePost, turnComments, protectedRoute, Dashboard, postPost, likePost, getCommentReplies, commentPost, getPosts, getsinglepost, savePost, getComments, likeComment, getSavedPosts } = require('../controllers/DashboardController')
 const { getNotifications, getSuggestions, getRequests, getLastDays } = require('../controllers/notificationsController')
 const { changeCurrentPassword, removeConnection, getBlockedUsers, blockUser, rejectConnectionRequest, sendConnectionRequest, shareProfleUsers, acceptConnectionRequest, getUsers, getLoggedInUser, getLoggedInUser_id, getLoggedInUserPosts, getUserProfile, getUserPosts, editProfilePost } = require('../controllers/UserController')
-const { postProfileMessage, getMessages, postMessages, getConversations, sharePostService, shareProfileService } = require('../controllers/chatController')
+const { getAllMessages, deleteConversation, postProfileMessage, getMessages, postMessages, getConversations, sharePostService, shareProfileService } = require('../controllers/chatController')
+const { creategetAdminChat, getUsersForAdmin, getAdminMessages, sendAdminMessage, reportUser,getAdminUserList } = require('../controllers/adminController')
 const { upload } = require("../middlewares/multer")
 
+
+//admin routes
+router.get('/creategetAdminChat', validateToken, creategetAdminChat)
+router.get('/getUsersForAdmin', getUsersForAdmin)
+router.get('/getAdminUserList', getAdminUserList)
+router.get('/getAdminMessages', getAdminMessages)
+router.post('/sendAdminMessage', sendAdminMessage)
+router.post('/reportUser', validateToken, reportUser)
 //Authorization
 router.get('/login', preventValidToken, login)
 router.get('/login', preventValidToken, signup)
@@ -59,8 +68,10 @@ router.post('/removeConnection', validateToken, removeConnection)
 //chat toutes
 router.post('/postProfileMessage', validateToken, postProfileMessage)
 router.get('/getMessages', validateToken, getMessages)
+router.get('/getAllMessages', validateToken, getAllMessages)
 router.get('/getConversations', validateToken, getConversations)
 router.post('/postMessages', validateToken, postMessages)
+router.post('/deleteConversation', validateToken, deleteConversation)
 
 
 

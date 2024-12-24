@@ -96,6 +96,10 @@ let schema = new mongoose.Schema(
             type: [mongoose.Schema.Types.ObjectId],
             default: []
         },
+        reported_by: {
+            type: [mongoose.Schema.Types.ObjectId],
+            default: []
+        }
     },
     { timestamps: true }
 );
