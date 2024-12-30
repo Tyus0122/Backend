@@ -223,6 +223,11 @@ const getLoggedInUser = async (req, res) => {
             },
         },
         {
+            $sort: {
+                createdAt: -1
+            }
+        },
+        {
             $limit: constants.PAGE_LIMIT
         }
     ]
@@ -254,8 +259,11 @@ const getLoggedInUserPosts = async (req, res) => {
             }
         },
         {
-            $skip: constants.PAGE_LIMIT * parseInt(req.query.page)
+            $sort: {
+                createdAt: -1
+            }
         },
+        ...limitHelper(req.query.page),
         {
             $limit: constants.PAGE_LIMIT
         }
@@ -330,6 +338,11 @@ const getUserPosts = async (req, res) => {
                 $match: {
                     posted_by: mongoId(req.query.user_id),
                     is_deleted: { $ne: true }
+                }
+            },
+            {
+                $sort: {
+                    createdAt: -1
                 }
             },
             {

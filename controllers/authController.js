@@ -4,22 +4,41 @@ const userCollection = require("../models/user");
 const _ = require('lodash')
 const { constants } = require("../utils/constants")
 const bcrypt = require('bcrypt');
-
+const formOtp = () => {
+    return Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
+}
 const loginSubmit = async (req, res) => {
     try {
-        const user = await userCollection.findOne({ email: req.body.email });
+        const user = await userCollection.findOne({ phno: req.body.phno });
         if (_.isNil(user)) {
             return new ErrorResponse(res, constants.USER_NOT_FOUND, 404)
         }
-        const isMatch = await bcrypt.compare(req.body.password, user.hashPassword);
-        if (!isMatch) {
-            return new ErrorResponse(res, constants.USER_NOT_FOUND, 404)
+        let response = {}
+        response.otp = formOtp()
+        console.log("Otp is : " + response.otp)
+        await userCollection.updateOne({ phno: req.body.phno }, { otp: response.otp })
+        return new SuccessResponse(res, { ...response });
+    }
+    catch (err) {
+        console.log("error in loginSubmit: ", err.message)
+    }
+}
+const loginOtpSubmit = async (req, res) => {
+    try {
+        console.log(req.body)
+        let user = await userCollection.findOne({ phno: req.body.phno })
+        if (_.isNil(user)) {
+            return new ErrorResponse(res, constants.USER_NOT_FOUND, 420);
+        }
+        if (user.otp !== req.body.otp) {
+            return new ErrorResponse(res, constants.INVALID_OTP, 420)
         }
         obj = {
             _id: user._id
         }
         const accessToken = jwt.sign({ obj }, process.env.USER_SECRET, { expiresIn: "12h" })
         return new SuccessResponse(res, { BearerToken: accessToken });
+
     }
     catch (err) {
         console.log("error in loginSubmit: ", err.message)
@@ -65,7 +84,7 @@ const getOtp = async (req, res) => {
         if (_.isNil(user)) {
             return new ErrorResponse(res, constants.USER_NOT_FOUND, 420);
         }
-        let otp = Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
+        let otp = formOtp();
         await userCollection.updateOne({ phno: req.body.phno }, { otp: otp })
         return new SuccessResponse(res, { message: otp })
     }
@@ -85,7 +104,7 @@ const postOtp = async (req, res) => {
             return new SuccessResponse(res, { message: "success" })
         }
         else {
-            return new ErrorResponse(res, constants.INVALID_OTP,420)
+            return new ErrorResponse(res, constants.INVALID_OTP, 420)
         }
     }
     catch (err) {
@@ -117,5 +136,6 @@ module.exports = {
     signup,
     getOtp,
     postOtp,
-    passwordChange
+    passwordChange,
+    loginOtpSubmit
 }
