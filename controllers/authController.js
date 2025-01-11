@@ -4,6 +4,7 @@ const userCollection = require("../models/user");
 const _ = require('lodash')
 const { constants } = require("../utils/constants")
 const bcrypt = require('bcrypt');
+const { sendOtp, phoneNumberLookup } = require('../helpers/randomHelper')
 const formOtp = () => {
     return Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
 }
@@ -16,11 +17,13 @@ const loginSubmit = async (req, res) => {
         let response = {}
         response.otp = formOtp()
         console.log("Otp is : " + response.otp)
+        await sendOtp(req.body.phno, response.otp)
         await userCollection.updateOne({ phno: req.body.phno }, { otp: response.otp })
         return new SuccessResponse(res, { ...response });
     }
     catch (err) {
         console.log("error in loginSubmit: ", err.message)
+        return new ErrorResponse(res, "error in loginSubmit");
     }
 }
 const loginOtpSubmit = async (req, res) => {
@@ -55,22 +58,53 @@ const signup = async (req, res) => {
 
 const signupSubmit = async (req, res) => {
     try {
-        let user = await userCollection.findOne({ email: req.body.email })
-        if (!_.isNil(user)) {
-            return new ErrorResponse(res, constants.USER_ALREADY_EXISTS, 201);
+        let response = {
+            errorMessage: "",
+            status: "ok",
         }
-        let hashPassword = await bcrypt.hash(req.body.password, constants.SALT_ROUNDS)
+        let userPipeline = [
+            {
+                $match: {
+                    $expr: {
+                        $or: [
+                            { $eq: ["$username", req.body.username] },
+                            { $eq: ["$phno", req.body.phno] },
+                            { $eq: ["$email", req.body.email] },
+                        ]
+                    }
+                }
+            }
+        ]
+        let user = await userCollection.aggregate(userPipeline)
+        if (user.length > 0) {
+            response.status = 'notok'
+            if (user[0].email == req.body.email) {
+                response.errorMessage = "an account with email already exists"
+                return new SuccessResponse(res, { ...response });
+            }
+            else if (user[0].username == req.body.username) {
+                response.errorMessage = "an account with username already exists"
+            }
+            else if (user[0]?.phno == req.body.phno) {
+                response.errorMessage = "an account with phone number already exists"
+            }
+            return new SuccessResponse(res, { ...response });
+        }
+        let validPhno = await phoneNumberLookup(req.body.phno)
+        if (!validPhno.valid) {
+            response.status = 'notok'
+            response.errorMessage = "Invalid phone number"
+            return new SuccessResponse(res, { ...response });
+        }
         const result = await userCollection.create({
             fullname: req.body.fullname,
             username: req.body.username,
-            email: req.body.email,
+            email: req.body.email ?? "",
             dob: req.body.dob,
             phno: req.body.phno,
             phnocode: req.body.phnocode,
-            password: req.body.password,
-            hashPassword: hashPassword
         })
-        return new SuccessResponse(res, { message: req.body });
+        return new SuccessResponse(res, { message: { ...response } });
     }
     catch (err) {
         console.log("error in signupSubmit: ", err.message);

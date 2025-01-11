@@ -29,11 +29,11 @@ let schema = new mongoose.Schema(
         },
         password: {
             type: String,
-            requires: true
+            default: null
         },
         hashPassword: {
             type: String,
-            requires: true
+            default: null
         },
         otp: {
             type: String,
