@@ -28,7 +28,6 @@ const loginSubmit = async (req, res) => {
 }
 const loginOtpSubmit = async (req, res) => {
     try {
-        console.log(req.body)
         let user = await userCollection.findOne({ phno: req.body.phno })
         if (_.isNil(user)) {
             return new ErrorResponse(res, constants.USER_NOT_FOUND, 420);
