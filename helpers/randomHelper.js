@@ -25,7 +25,8 @@ async function sendOtp(phoneNumber, otp) {
             });
         console.log("OTP sent!");
     } catch (error) {
-        console.error("Error sending OTP:", error);
+        console.error("Error sending OTP:", error.message);
+        throw new Error("Error sending OTP: " + error.message);
     }
 }
 async function verifyOTP(to, code) {
