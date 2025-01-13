@@ -4,7 +4,7 @@ const userCollection = require("../models/user");
 const _ = require('lodash')
 const { constants } = require("../utils/constants")
 const bcrypt = require('bcrypt');
-const { sendOtp, phoneNumberLookup } = require('../helpers/randomHelper')
+const { sendOtp, verifyOTP, getLastOTP, phoneNumberLookup } = require('../helpers/randomHelper')
 const formOtp = () => {
     return Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
 }
@@ -32,7 +32,8 @@ const loginOtpSubmit = async (req, res) => {
         if (_.isNil(user)) {
             return new ErrorResponse(res, constants.USER_NOT_FOUND, 420);
         }
-        if (user.otp !== req.body.otp) {
+        let verify = await verifyOTP(req.body.phno, req.body.otp)
+        if (!verify) {
             return new ErrorResponse(res, constants.INVALID_OTP, 420)
         }
         obj = {
