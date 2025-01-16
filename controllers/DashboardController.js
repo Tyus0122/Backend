@@ -7,6 +7,7 @@ const _ = require('lodash')
 const { constants, limitHelper } = require("../utils/constants")
 const { uploadFile, getFileMetadata, mongoId, generateUniqueFileName } = require("../helpers/s3helper")
 const { formatDateForComments } = require("../helpers/timehelper");
+const { JsonWebTokenError } = require('jsonwebtoken');
 const commentsFormatHelper = (comments, logged_in_user_id) => {
     output = {
         comments: []
@@ -451,6 +452,43 @@ const getHomePosts = async (req, res) => {
         // Compare the post's date and time with the current date and time
         return postDate > currentDate;
     });
+    if (posts.length < constants.PAGE_LIMIT) {
+        pipeline = [
+            {
+                $match: {
+                    is_deleted: {
+                        $ne: true
+                    },
+                    posted_by: {
+                        $nin: [req.user._id, ...req.user.blocked_users],
+
+                    },
+                    city: req.user.city,
+                }
+            },
+            {
+                $sort: {
+                    createdAt: -1
+                }
+            },
+            ...limitHelper(req.query.page)
+        ]
+        let posts_append = await postCollection.aggregate(pipeline)
+        posts = [...posts, ...posts_append].filter((post) => {
+            const [day, month, year] = post.date.split('-'); // Split the date into day, month, year
+            const [hours, minutes, seconds] = post.time.replace(/\u202F/g, ' ').split(' ')[0].split(':'); // Split the time into hours and minutes
+
+            // Create a Date object for the post's date and time
+            let dateRef = `${year}-${month}-${day}T${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}:${seconds.padStart(2, '0')}`
+            const postDate = new Date(dateRef);
+
+            // Get the current date and time
+            const currentDate = new Date();
+
+            // Compare the post's date and time with the current date and time
+            return postDate > currentDate;
+        });
+    }
     let userids = posts.map(post => post.posted_by)
     let userpipeline = [
         {
@@ -567,7 +605,7 @@ const getHomePosts = async (req, res) => {
             turn_off_comments: post.turn_off_comments ? true : false,
             posted_by: users[post.posted_by.toString()].username,
             posted_by_city: users[post.posted_by.toString()].city,
-            pic: users[post.posted_by.toString()].pic.url,
+            pic: users[post.posted_by.toString()].pic?.url,
             caption: post.caption,
             files: post.files,
             liked: liked.has(req.user._id.toString()),
