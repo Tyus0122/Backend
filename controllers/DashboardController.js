@@ -790,7 +790,7 @@ const getsinglepost = async (req, res) => {
                 posted_by_city: users[post.posted_by.toString()].city,
                 turn_off_comments: post.turn_off_comments ? true : false,
                 is_deleted: post.is_deleted ? true : false,
-                pic: users[post.posted_by.toString()].pic?.url,
+                pic: users[post.posted_by.toString()].pic.url,
                 caption: post.caption,
                 files: post.files,
                 liked: liked.has(req.user._id.toString()),
@@ -834,7 +834,7 @@ const getsinglepost = async (req, res) => {
         return new SuccessResponse(res, { message: output })
     }
     catch (err) {
-        console.error("error in getsinglepost: ",err)
+        console.log("error in getsinglepost: ",err)
         return new ErrorResponse(res, { message: 'Error fetching post' })
     }
 }
