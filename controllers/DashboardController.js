@@ -660,6 +660,7 @@ const getHomePosts = async (req, res) => {
     }
 }
 const getsinglepost = async (req, res) => {
+    // console.log(req.query);
     try {
         const pipeline = [
             {
@@ -789,7 +790,7 @@ const getsinglepost = async (req, res) => {
                 posted_by_city: users[post.posted_by.toString()].city,
                 turn_off_comments: post.turn_off_comments ? true : false,
                 is_deleted: post.is_deleted ? true : false,
-                pic: users[post.posted_by.toString()].pic.url,
+                pic: users[post.posted_by.toString()].pic?.url,
                 caption: post.caption,
                 files: post.files,
                 liked: liked.has(req.user._id.toString()),
