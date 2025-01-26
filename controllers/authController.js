@@ -8,6 +8,10 @@ const { sendOtp, verifyOTP, getLastOTP, phoneNumberLookup } = require('../helper
 const formOtp = () => {
     return Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
 }
+
+const healthCheck = (req,res) => {
+    return new SuccessResponse(res, { message: "health check" })
+}
 const loginSubmit = async (req, res) => {
     try {
         const user = await userCollection.findOne({ phno: req.body.phno });
@@ -16,7 +20,6 @@ const loginSubmit = async (req, res) => {
         }
         let response = {}
         response.otp = formOtp()
-        console.log("Otp is : " + response.otp)
         await sendOtp(req.body.phno, response.otp)
         await userCollection.updateOne({ phno: req.body.phno }, { otp: response.otp })
         return new SuccessResponse(res, { ...response });
@@ -171,5 +174,6 @@ module.exports = {
     getOtp,
     postOtp,
     passwordChange,
-    loginOtpSubmit
+    loginOtpSubmit,
+    healthCheck
 }

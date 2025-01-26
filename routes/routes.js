@@ -1,6 +1,6 @@
 const express = require('express')
 const router = express.Router()
-const { loginOtpSubmit, loginSubmit, login, signup, signupSubmit, getOtp, postOtp, passwordChange } = require('../controllers/authController')
+const { loginOtpSubmit, loginSubmit, login, signup, signupSubmit, getOtp, postOtp, passwordChange,healthCheck } = require('../controllers/authController')
 const { validateToken, preventValidToken } = require('../middlewares/authMidware')
 const { postEditPost, getEditPost, deletePost, turnComments, protectedRoute, Dashboard, postPost, likePost, getCommentReplies, commentPost, getPosts, getHomePosts, getsinglepost, savePost, getComments, likeComment, getSavedPosts } = require('../controllers/DashboardController')
 const { getNotifications, getSuggestions, getRequests, getLastDays } = require('../controllers/notificationsController')
@@ -12,6 +12,7 @@ const { upload } = require("../middlewares/multer")
 
 //admin routes
 router.get('/creategetAdminChat', validateToken, creategetAdminChat)
+router.get('/healthCheck', healthCheck)
 router.get('/getUsersForAdmin', getUsersForAdmin)
 router.get('/getAdminUserList', getAdminUserList)
 router.get('/getAdminMessages', getAdminMessages)
