@@ -236,234 +236,18 @@ const getCommentReplies = async (req, res) => {
     }
 }
 const getPosts = async (req, res) => {
-    let pipeline = [
-        {
-            $match: {
-                is_deleted: {
-                    $ne: true
-                },
-                posted_by: {
-                    $nin: [req.user._id, ...req.user.blocked_users]
-                },
-                city: { $regex: new RegExp(req.query.search, 'i') },
-                date: { $regex: new RegExp(req.query.date, 'i') }
-            }
-        },
-        {
-            $sort: {
-                createdAt: -1
-            }
-        },
-        ...limitHelper(req.query.page)
-    ]
-    let posts = await postCollection.aggregate(pipeline)
-    let userids = posts.map(post => post.posted_by)
-    let userpipeline = [
-        {
-            $match: {
-                _id: {
-                    $in: userids
-                }
-            }
-        }
-    ]
-    let users = await userCollection.aggregate(userpipeline)
-    users = _.keyBy(users, (user) => user._id.toString())
-    let output = {
-        posts: [],
-        logged_in_user: {}
-    }
-    let realcommentpipeline = [
-        {
-            $match: {
-                post_id: {
-                    $in: posts.map(post => post._id)
-                },
-                parent_comment_id: null,
-            },
-        },
-        {
-            $sort: { post_id: 1, createdAt: -1 },
-        },
-        {
-            $group: {
-                _id: "$post_id",
-                comments: {
-                    $push: {
-                        _id: "$_id",
-                        comment: "$comment",
-                        commentedBy: "$commentedBy",
-                        likes: "$likes",
-                        createdAt: "$createdAt",
-                        updatedAt: "$updatedAt",
-                    },
-                },
-            },
-        },
-        {
-            $addFields: {
-                length: {
-                    $size: "$comments", // Calculate the length of comments array
-                },
-            },
-        },
-        {
-            $project: {
-                comments: {
-                    $slice: ["$comments", 0, constants.PAGE_LIMIT],
-                },
-                length: 1
-            },
-        },
-        {
-            $unwind: "$comments",
-        },
-        {
-            $lookup: {
-                from: "users",
-                let: { userId: "$comments.commentedBy" },
-                pipeline: [
-                    { $match: { $expr: { $eq: ["$_id", "$$userId"] } } },
-                    { $project: { _id: 1, fullname: 1, city: 1, pic: 1 } },
-                ],
-                as: "userDetails",
-            },
-        },
-        {
-            $unwind: {
-                path: "$userDetails",
-                preserveNullAndEmptyArrays: true,
-            },
-        },
-        {
-            $group: {
-                _id: "$_id",
-                comments: {
-                    $push: {
-                        _id: "$comments._id",
-                        comment: "$comments.comment",
-                        commentedBy: "$comments.commentedBy",
-                        likes: "$comments.likes",
-                        createdAt: "$comments.createdAt",
-                        name: "$userDetails.fullname",
-                        city: "$userDetails.city",
-                        pic: "$userDetails.pic"
-                    },
-                },
-                length: {
-                    $max: "$length"
-                }
-            },
-        },
-    ]
-    let realcomments = await commentsCollection.aggregate(realcommentpipeline)
-    realcomments = _.keyBy(realcomments, (comment) => comment._id.toString())
-    _.forEach(posts, (post) => {
-        const postIdString = post._id.toString();
-        if (realcomments[postIdString]) {
-            realcomments[postIdString].comments = commentsFormatHelper(realcomments[postIdString].comments, req.user._id);
-        } else {
-            realcomments[postIdString] = { comments: [] }; // If the post doesn't exist, initialize the comments as an empty array
-        }
-        liked = new Set(post.likes.map(liked => liked.toString()))
-        output.posts.push({
-            _id: post._id,
-            saved: req.user.saved_posts.includes(mongoId(post._id)),
-            posted_by_id: post.posted_by,
-            turn_off_comments: post.turn_off_comments ? true : false,
-            posted_by: users[post.posted_by.toString()].username,
-            posted_by_city: users[post.posted_by.toString()].city,
-            pic: users[post.posted_by.toString()].pic.url,
-            caption: post.caption,
-            files: post.files,
-            liked: liked.has(req.user._id.toString()),
-            likescount: post.likescount,
-            commentscount: realcomments[postIdString]?.length ?? 0,
-            post_date: post.date,
-            post_time: post.time,
-            post_place: post.city,
-        })
-    })
-    output.logged_in_user.pic = req.user.pic
-    output.logged_in_user.name = req.user.fullname
-    output.logged_in_user.city = req.user.city
-    output.isLastPage = output.posts.length < constants.PAGE_LIMIT ? true : false
-    output.comments = realcomments
-    let shareUsersPipeline = [
-        {
-            $match: {
-                _id: {
-                    $ne: req.user._id
-                }
-            }
-        },
-        {
-            $project: {
-                _id: 1,
-                pic: 1,
-                city: 1,
-                fullname: 1,
-                username: 1
-            }
-        },
-        {
-            $limit: constants.PAGE_LIMIT
-        }
-    ]
-    output.shareUsers = await userCollection.aggregate(shareUsersPipeline)
-    output.shareIsLastPage = output.shareUsers.length < constants.PAGE_LIMIT ? true : false
-    output.sharePageLimit = constants.PAGE_LIMIT
-    return new SuccessResponse(res, { message: output })
-}
-const getHomePosts = async (req, res) => {
-    let pipeline = [
-        {
-            $match: {
-                is_deleted: {
-                    $ne: true
-                },
-                posted_by: {
-                    $nin: [req.user._id, ...req.user.blocked_users],
-                    $in: req.user.connections
-                },
-                city: { $regex: new RegExp(req.query.search, 'i') },
-                date: { $regex: new RegExp(req.query.date, 'i') },
-            }
-        },
-        {
-            $sort: {
-                createdAt: -1
-            }
-        },
-        ...limitHelper(req.query.page)
-    ]
-    let posts = await postCollection.aggregate(pipeline)
-    posts = posts.filter((post) => {
-        const [day, month, year] = post.date.split('-'); // Split the date into day, month, year
-        const [hours, minutes, seconds] = post.time.replace(/\u202F/g, ' ').split(' ')[0].split(':'); // Split the time into hours and minutes
-
-        // Create a Date object for the post's date and time
-        let dateRef = `${year}-${month}-${day}T${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}:${seconds.padStart(2, '0')}`
-        const postDate = new Date(dateRef);
-
-        // Get the current date and time
-        const currentDate = new Date();
-
-        // Compare the post's date and time with the current date and time
-        return postDate > currentDate;
-    });
-    if (posts.length < constants.PAGE_LIMIT) {
-        pipeline = [
+    try {
+        let pipeline = [
             {
                 $match: {
                     is_deleted: {
                         $ne: true
                     },
                     posted_by: {
-                        $nin: [req.user._id, ...req.user.blocked_users],
-
+                        $nin: [req.user._id, ...req.user.blocked_users]
                     },
-                    city: req.user.city,
+                    city: { $regex: new RegExp(req.query.search, 'i') },
+                    date: { $regex: new RegExp(req.query.date, 'i') }
                 }
             },
             {
@@ -473,351 +257,585 @@ const getHomePosts = async (req, res) => {
             },
             ...limitHelper(req.query.page)
         ]
-        let posts_append = await postCollection.aggregate(pipeline)
-        posts = [...posts, ...posts_append].filter((post) => {
+        let posts = await postCollection.aggregate(pipeline)
+        let userids = posts.map(post => post.posted_by)
+        let userpipeline = [
+            {
+                $match: {
+                    _id: {
+                        $in: userids
+                    }
+                }
+            }
+        ]
+        let users = await userCollection.aggregate(userpipeline)
+        users = _.keyBy(users, (user) => user._id.toString())
+        let output = {
+            posts: [],
+            logged_in_user: {}
+        }
+        let realcommentpipeline = [
+            {
+                $match: {
+                    post_id: {
+                        $in: posts.map(post => post._id)
+                    },
+                    parent_comment_id: null,
+                },
+            },
+            {
+                $sort: { post_id: 1, createdAt: -1 },
+            },
+            {
+                $group: {
+                    _id: "$post_id",
+                    comments: {
+                        $push: {
+                            _id: "$_id",
+                            comment: "$comment",
+                            commentedBy: "$commentedBy",
+                            likes: "$likes",
+                            createdAt: "$createdAt",
+                            updatedAt: "$updatedAt",
+                        },
+                    },
+                },
+            },
+            {
+                $addFields: {
+                    length: {
+                        $size: "$comments", // Calculate the length of comments array
+                    },
+                },
+            },
+            {
+                $project: {
+                    comments: {
+                        $slice: ["$comments", 0, constants.PAGE_LIMIT],
+                    },
+                    length: 1
+                },
+            },
+            {
+                $unwind: "$comments",
+            },
+            {
+                $lookup: {
+                    from: "users",
+                    let: { userId: "$comments.commentedBy" },
+                    pipeline: [
+                        { $match: { $expr: { $eq: ["$_id", "$$userId"] } } },
+                        { $project: { _id: 1, fullname: 1, city: 1, pic: 1 } },
+                    ],
+                    as: "userDetails",
+                },
+            },
+            {
+                $unwind: {
+                    path: "$userDetails",
+                    preserveNullAndEmptyArrays: true,
+                },
+            },
+            {
+                $group: {
+                    _id: "$_id",
+                    comments: {
+                        $push: {
+                            _id: "$comments._id",
+                            comment: "$comments.comment",
+                            commentedBy: "$comments.commentedBy",
+                            likes: "$comments.likes",
+                            createdAt: "$comments.createdAt",
+                            name: "$userDetails.fullname",
+                            city: "$userDetails.city",
+                            pic: "$userDetails.pic"
+                        },
+                    },
+                    length: {
+                        $max: "$length"
+                    }
+                },
+            },
+        ]
+        let realcomments = await commentsCollection.aggregate(realcommentpipeline)
+        realcomments = _.keyBy(realcomments, (comment) => comment._id.toString())
+        _.forEach(posts, (post) => {
+            const postIdString = post._id.toString();
+            if (realcomments[postIdString]) {
+                realcomments[postIdString].comments = commentsFormatHelper(realcomments[postIdString].comments, req.user._id);
+            } else {
+                realcomments[postIdString] = { comments: [] }; // If the post doesn't exist, initialize the comments as an empty array
+            }
+            liked = new Set(post.likes.map(liked => liked.toString()))
+            output.posts.push({
+                _id: post._id,
+                saved: req.user.saved_posts.includes(mongoId(post._id)),
+                posted_by_id: post.posted_by,
+                turn_off_comments: post.turn_off_comments ? true : false,
+                posted_by: users[post.posted_by.toString()].username,
+                posted_by_city: users[post.posted_by.toString()].city,
+                pic: users[post.posted_by.toString()].pic.url,
+                caption: post.caption,
+                files: post.files,
+                liked: liked.has(req.user._id.toString()),
+                likescount: post.likescount,
+                commentscount: realcomments[postIdString]?.length ?? 0,
+                post_date: post.date,
+                post_time: post.time,
+                post_place: post.city,
+            })
+        })
+        output.logged_in_user.pic = req.user.pic
+        output.logged_in_user.name = req.user.fullname
+        output.logged_in_user.city = req.user.city
+        output.isLastPage = output.posts.length < constants.PAGE_LIMIT ? true : false
+        output.comments = realcomments
+        let shareUsersPipeline = [
+            {
+                $match: {
+                    _id: {
+                        $ne: req.user._id
+                    }
+                }
+            },
+            {
+                $project: {
+                    _id: 1,
+                    pic: 1,
+                    city: 1,
+                    fullname: 1,
+                    username: 1
+                }
+            },
+            {
+                $limit: constants.PAGE_LIMIT
+            }
+        ]
+        output.shareUsers = await userCollection.aggregate(shareUsersPipeline)
+        output.shareIsLastPage = output.shareUsers.length < constants.PAGE_LIMIT ? true : false
+        output.sharePageLimit = constants.PAGE_LIMIT
+        return new SuccessResponse(res, { message: output })
+    }
+    catch (err) {
+        console.log("error in getPosts: ", err.message)
+        return new ErrorResponse(res, "error in getPosts")
+    }
+}
+const getHomePosts = async (req, res) => {
+    try {
+        let pipeline = [
+            {
+                $match: {
+                    is_deleted: {
+                        $ne: true
+                    },
+                    posted_by: {
+                        $nin: [req.user._id, ...req.user.blocked_users],
+                        $in: req.user.connections
+                    },
+                    city: { $regex: new RegExp(req.query.search, 'i') },
+                    date: { $regex: new RegExp(req.query.date, 'i') },
+                }
+            },
+            {
+                $sort: {
+                    createdAt: -1
+                }
+            },
+            ...limitHelper(req.query.page)
+        ]
+        let posts = await postCollection.aggregate(pipeline)
+        posts = posts.filter((post) => {
             const [day, month, year] = post.date.split('-'); // Split the date into day, month, year
             const [hours, minutes, seconds] = post.time.replace(/\u202F/g, ' ').split(' ')[0].split(':'); // Split the time into hours and minutes
-
+    
             // Create a Date object for the post's date and time
             let dateRef = `${year}-${month}-${day}T${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}:${seconds.padStart(2, '0')}`
             const postDate = new Date(dateRef);
-
+    
             // Get the current date and time
             const currentDate = new Date();
-
+    
             // Compare the post's date and time with the current date and time
             return postDate > currentDate;
         });
-    }
-    let userids = posts.map(post => post.posted_by)
-    let userpipeline = [
-        {
-            $match: {
-                _id: {
-                    $in: userids
+        if (posts.length < constants.PAGE_LIMIT) {
+            pipeline = [
+                {
+                    $match: {
+                        is_deleted: {
+                            $ne: true
+                        },
+                        posted_by: {
+                            $nin: [req.user._id, ...req.user.blocked_users],
+    
+                        },
+                        city: req.user.city,
+                    }
+                },
+                {
+                    $sort: {
+                        createdAt: -1
+                    }
+                },
+                ...limitHelper(req.query.page)
+            ]
+            let posts_append = await postCollection.aggregate(pipeline)
+            posts = [...posts, ...posts_append].filter((post) => {
+                const [day, month, year] = post.date.split('-'); // Split the date into day, month, year
+                const [hours, minutes, seconds] = post.time.replace(/\u202F/g, ' ').split(' ')[0].split(':'); // Split the time into hours and minutes
+    
+                // Create a Date object for the post's date and time
+                let dateRef = `${year}-${month}-${day}T${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}:${seconds.padStart(2, '0')}`
+                const postDate = new Date(dateRef);
+    
+                // Get the current date and time
+                const currentDate = new Date();
+    
+                // Compare the post's date and time with the current date and time
+                return postDate > currentDate;
+            });
+        }
+        let userids = posts.map(post => post.posted_by)
+        let userpipeline = [
+            {
+                $match: {
+                    _id: {
+                        $in: userids
+                    }
                 }
             }
+        ]
+        let users = await userCollection.aggregate(userpipeline)
+        users = _.keyBy(users, (user) => user._id.toString())
+        let output = {
+            posts: [],
+            logged_in_user: {}
         }
-    ]
-    let users = await userCollection.aggregate(userpipeline)
-    users = _.keyBy(users, (user) => user._id.toString())
-    let output = {
-        posts: [],
-        logged_in_user: {}
-    }
-    let realcommentpipeline = [
-        {
-            $match: {
-                post_id: {
-                    $in: posts.map(post => post._id)
+        let realcommentpipeline = [
+            {
+                $match: {
+                    post_id: {
+                        $in: posts.map(post => post._id)
+                    },
+                    parent_comment_id: null,
                 },
-                parent_comment_id: null,
             },
-        },
-        {
-            $sort: { post_id: 1, createdAt: -1 },
-        },
-        {
-            $group: {
-                _id: "$post_id",
-                comments: {
-                    $push: {
-                        _id: "$_id",
-                        comment: "$comment",
-                        commentedBy: "$commentedBy",
-                        likes: "$likes",
-                        createdAt: "$createdAt",
-                        updatedAt: "$updatedAt",
+            {
+                $sort: { post_id: 1, createdAt: -1 },
+            },
+            {
+                $group: {
+                    _id: "$post_id",
+                    comments: {
+                        $push: {
+                            _id: "$_id",
+                            comment: "$comment",
+                            commentedBy: "$commentedBy",
+                            likes: "$likes",
+                            createdAt: "$createdAt",
+                            updatedAt: "$updatedAt",
+                        },
                     },
                 },
             },
-        },
-        {
-            $addFields: {
-                length: {
-                    $size: "$comments", // Calculate the length of comments array
-                },
-            },
-        },
-        {
-            $project: {
-                comments: {
-                    $slice: ["$comments", 0, constants.PAGE_LIMIT],
-                },
-                length: 1
-            },
-        },
-        {
-            $unwind: "$comments",
-        },
-        {
-            $lookup: {
-                from: "users",
-                let: { userId: "$comments.commentedBy" },
-                pipeline: [
-                    { $match: { $expr: { $eq: ["$_id", "$$userId"] } } },
-                    { $project: { _id: 1, fullname: 1, city: 1, pic: 1 } },
-                ],
-                as: "userDetails",
-            },
-        },
-        {
-            $unwind: {
-                path: "$userDetails",
-                preserveNullAndEmptyArrays: true,
-            },
-        },
-        {
-            $group: {
-                _id: "$_id",
-                comments: {
-                    $push: {
-                        _id: "$comments._id",
-                        comment: "$comments.comment",
-                        commentedBy: "$comments.commentedBy",
-                        likes: "$comments.likes",
-                        createdAt: "$comments.createdAt",
-                        name: "$userDetails.fullname",
-                        city: "$userDetails.city",
-                        pic: "$userDetails.pic"
+            {
+                $addFields: {
+                    length: {
+                        $size: "$comments", // Calculate the length of comments array
                     },
                 },
-                length: {
-                    $max: "$length"
-                }
             },
-        },
-    ]
-    let realcomments = await commentsCollection.aggregate(realcommentpipeline)
-    realcomments = _.keyBy(realcomments, (comment) => comment._id.toString())
-    _.forEach(posts, (post) => {
-        const postIdString = post._id.toString();
-        if (realcomments[postIdString]) {
-            realcomments[postIdString].comments = commentsFormatHelper(realcomments[postIdString].comments, req.user._id);
-        } else {
-            realcomments[postIdString] = { comments: [] }; // If the post doesn't exist, initialize the comments as an empty array
-        }
-        liked = new Set(post.likes.map(liked => liked.toString()))
-        output.posts.push({
-            _id: post._id,
-            saved: req.user.saved_posts.includes(mongoId(post._id)),
-            posted_by_id: post.posted_by,
-            turn_off_comments: post.turn_off_comments ? true : false,
-            posted_by: users[post.posted_by.toString()].username,
-            posted_by_city: users[post.posted_by.toString()].city,
-            pic: users[post.posted_by.toString()].pic?.url,
-            caption: post.caption,
-            files: post.files,
-            liked: liked.has(req.user._id.toString()),
-            likescount: post.likescount,
-            commentscount: realcomments[postIdString]?.length ?? 0,
-            post_date: post.date,
-            post_time: post.time,
-            post_place: post.city,
+            {
+                $project: {
+                    comments: {
+                        $slice: ["$comments", 0, constants.PAGE_LIMIT],
+                    },
+                    length: 1
+                },
+            },
+            {
+                $unwind: "$comments",
+            },
+            {
+                $lookup: {
+                    from: "users",
+                    let: { userId: "$comments.commentedBy" },
+                    pipeline: [
+                        { $match: { $expr: { $eq: ["$_id", "$$userId"] } } },
+                        { $project: { _id: 1, fullname: 1, city: 1, pic: 1 } },
+                    ],
+                    as: "userDetails",
+                },
+            },
+            {
+                $unwind: {
+                    path: "$userDetails",
+                    preserveNullAndEmptyArrays: true,
+                },
+            },
+            {
+                $group: {
+                    _id: "$_id",
+                    comments: {
+                        $push: {
+                            _id: "$comments._id",
+                            comment: "$comments.comment",
+                            commentedBy: "$comments.commentedBy",
+                            likes: "$comments.likes",
+                            createdAt: "$comments.createdAt",
+                            name: "$userDetails.fullname",
+                            city: "$userDetails.city",
+                            pic: "$userDetails.pic"
+                        },
+                    },
+                    length: {
+                        $max: "$length"
+                    }
+                },
+            },
+        ]
+        let realcomments = await commentsCollection.aggregate(realcommentpipeline)
+        realcomments = _.keyBy(realcomments, (comment) => comment._id.toString())
+        _.forEach(posts, (post) => {
+            const postIdString = post._id.toString();
+            if (realcomments[postIdString]) {
+                realcomments[postIdString].comments = commentsFormatHelper(realcomments[postIdString].comments, req.user._id);
+            } else {
+                realcomments[postIdString] = { comments: [] }; // If the post doesn't exist, initialize the comments as an empty array
+            }
+            liked = new Set(post.likes.map(liked => liked.toString()))
+            output.posts.push({
+                _id: post._id,
+                saved: req.user.saved_posts.includes(mongoId(post._id)),
+                posted_by_id: post.posted_by,
+                turn_off_comments: post.turn_off_comments ? true : false,
+                posted_by: users[post.posted_by.toString()].username,
+                posted_by_city: users[post.posted_by.toString()].city,
+                pic: users[post.posted_by.toString()].pic?.url,
+                caption: post.caption,
+                files: post.files,
+                liked: liked.has(req.user._id.toString()),
+                likescount: post.likescount,
+                commentscount: realcomments[postIdString]?.length ?? 0,
+                post_date: post.date,
+                post_time: post.time,
+                post_place: post.city,
+            })
         })
-    })
-    output.logged_in_user.pic = req.user.pic
-    output.logged_in_user.name = req.user.fullname
-    output.logged_in_user.city = req.user.city
-    output.isLastPage = output.posts.length < constants.PAGE_LIMIT ? true : false
-    output.comments = realcomments
-    let shareUsersPipeline = [
-        {
-            $match: {
-                _id: {
-                    $ne: req.user._id
+        output.logged_in_user.pic = req.user.pic
+        output.logged_in_user.name = req.user.fullname
+        output.logged_in_user.city = req.user.city
+        output.isLastPage = output.posts.length < constants.PAGE_LIMIT ? true : false
+        output.comments = realcomments
+        let shareUsersPipeline = [
+            {
+                $match: {
+                    _id: {
+                        $ne: req.user._id
+                    }
                 }
+            },
+            {
+                $project: {
+                    _id: 1,
+                    pic: 1,
+                    city: 1,
+                    fullname: 1,
+                    username: 1
+                }
+            },
+            {
+                $limit: constants.PAGE_LIMIT
             }
-        },
-        {
-            $project: {
-                _id: 1,
-                pic: 1,
-                city: 1,
-                fullname: 1,
-                username: 1
-            }
-        },
-        {
-            $limit: constants.PAGE_LIMIT
-        }
-    ]
-    output.shareUsers = await userCollection.aggregate(shareUsersPipeline)
-    output.shareIsLastPage = output.shareUsers.length < constants.PAGE_LIMIT ? true : false
-    output.sharePageLimit = constants.PAGE_LIMIT
-    return new SuccessResponse(res, { message: output })
+        ]
+        output.shareUsers = await userCollection.aggregate(shareUsersPipeline)
+        output.shareIsLastPage = output.shareUsers.length < constants.PAGE_LIMIT ? true : false
+        output.sharePageLimit = constants.PAGE_LIMIT
+        return new SuccessResponse(res, { message: output })
+    }
+    catch (err) {
+        console.error("error in getHomePosts: ",err)
+        return new ErrorResponse(res, { message: 'Error fetching posts' })
+    }
 }
 const getsinglepost = async (req, res) => {
-    const pipeline = [
-        {
-            $match: {
-                _id: mongoId(req.query.post),
-                is_deleted: {
-                    $ne: true
+    try {
+        const pipeline = [
+            {
+                $match: {
+                    _id: mongoId(req.query.post),
+                    is_deleted: {
+                        $ne: true
+                    }
                 }
             }
-        }
-    ]
-    let posts = await postCollection.aggregate(pipeline)
-    let userids = posts.map(post => post.posted_by)
-    let userpipeline = [
-        {
-            $match: {
-                _id: {
-                    $in: userids
+        ]
+        let posts = await postCollection.aggregate(pipeline)
+        let userids = posts.map(post => post.posted_by)
+        let userpipeline = [
+            {
+                $match: {
+                    _id: {
+                        $in: userids
+                    }
                 }
             }
+        ]
+        let users = await userCollection.aggregate(userpipeline)
+        users = _.keyBy(users, (user) => user._id.toString())
+        let output = {
+            posts: [],
+            logged_in_user: {}
         }
-    ]
-    let users = await userCollection.aggregate(userpipeline)
-    users = _.keyBy(users, (user) => user._id.toString())
-    let output = {
-        posts: [],
-        logged_in_user: {}
-    }
-    let realcommentpipeline = [
-        {
-            $match: {
-                post_id: {
-                    $in: posts.map(post => post._id)
+        let realcommentpipeline = [
+            {
+                $match: {
+                    post_id: {
+                        $in: posts.map(post => post._id)
+                    },
+                    parent_comment_id: null,
                 },
-                parent_comment_id: null,
             },
-        },
-        {
-            $sort: { post_id: 1, createdAt: -1 },
-        },
-        {
-            $group: {
-                _id: "$post_id",
-                comments: {
-                    $push: {
-                        _id: "$_id",
-                        comment: "$comment",
-                        commentedBy: "$commentedBy",
-                        likes: "$likes",
-                        createdAt: "$createdAt",
-                        updatedAt: "$updatedAt",
+            {
+                $sort: { post_id: 1, createdAt: -1 },
+            },
+            {
+                $group: {
+                    _id: "$post_id",
+                    comments: {
+                        $push: {
+                            _id: "$_id",
+                            comment: "$comment",
+                            commentedBy: "$commentedBy",
+                            likes: "$likes",
+                            createdAt: "$createdAt",
+                            updatedAt: "$updatedAt",
+                        },
                     },
                 },
             },
-        },
-        {
-            $addFields: {
-                length: {
-                    $size: "$comments", // Calculate the length of comments array
-                },
-            },
-        },
-        {
-            $project: {
-                comments: {
-                    $slice: ["$comments", 0, constants.PAGE_LIMIT],
-                },
-                length: 1
-            },
-        },
-        {
-            $unwind: "$comments",
-        },
-        {
-            $lookup: {
-                from: "users",
-                let: { userId: "$comments.commentedBy" },
-                pipeline: [
-                    { $match: { $expr: { $eq: ["$_id", "$$userId"] } } },
-                    { $project: { _id: 1, fullname: 1, city: 1, pic: 1 } },
-                ],
-                as: "userDetails",
-            },
-        },
-        {
-            $unwind: {
-                path: "$userDetails",
-                preserveNullAndEmptyArrays: true,
-            },
-        },
-        {
-            $group: {
-                _id: "$_id",
-                comments: {
-                    $push: {
-                        _id: "$comments._id",
-                        comment: "$comments.comment",
-                        commentedBy: "$comments.commentedBy",
-                        likes: "$comments.likes",
-                        createdAt: "$comments.createdAt",
-                        name: "$userDetails.fullname",
-                        city: "$userDetails.city",
-                        pic: "$userDetails.pic"
+            {
+                $addFields: {
+                    length: {
+                        $size: "$comments", // Calculate the length of comments array
                     },
                 },
-                length: {
-                    $max: "$length"
-                }
             },
-        },
-    ]
-    let realcomments = await commentsCollection.aggregate(realcommentpipeline)
-    realcomments = _.keyBy(realcomments, (comment) => comment._id.toString())
-    _.forEach(posts, (post) => {
-        const postIdString = post._id.toString();
-        if (realcomments[postIdString]) {
-            realcomments[postIdString].comments = commentsFormatHelper(realcomments[postIdString].comments, req.user._id);
-        } else {
-            realcomments[postIdString] = { comments: [] }; // If the post doesn't exist, initialize the comments as an empty array
-        }
-        liked = new Set(post.likes.map(liked => liked.toString()))
-        output.posts.push({
-            _id: post._id,
-            saved: req.user.saved_posts.includes(mongoId(post._id)),
-            posted_by_id: post.posted_by,
-            posted_by: users[post.posted_by.toString()].username,
-            posted_by_city: users[post.posted_by.toString()].city,
-            turn_off_comments: post.turn_off_comments ? true : false,
-            is_deleted: post.is_deleted ? true : false,
-            pic: users[post.posted_by.toString()].pic.url,
-            caption: post.caption,
-            files: post.files,
-            liked: liked.has(req.user._id.toString()),
-            likescount: post.likescount,
-            commentscount: realcomments[postIdString]?.length ?? 0,
-            post_date: post.date,
-            post_time: post.time,
-            post_place: post.city,
+            {
+                $project: {
+                    comments: {
+                        $slice: ["$comments", 0, constants.PAGE_LIMIT],
+                    },
+                    length: 1
+                },
+            },
+            {
+                $unwind: "$comments",
+            },
+            {
+                $lookup: {
+                    from: "users",
+                    let: { userId: "$comments.commentedBy" },
+                    pipeline: [
+                        { $match: { $expr: { $eq: ["$_id", "$$userId"] } } },
+                        { $project: { _id: 1, fullname: 1, city: 1, pic: 1 } },
+                    ],
+                    as: "userDetails",
+                },
+            },
+            {
+                $unwind: {
+                    path: "$userDetails",
+                    preserveNullAndEmptyArrays: true,
+                },
+            },
+            {
+                $group: {
+                    _id: "$_id",
+                    comments: {
+                        $push: {
+                            _id: "$comments._id",
+                            comment: "$comments.comment",
+                            commentedBy: "$comments.commentedBy",
+                            likes: "$comments.likes",
+                            createdAt: "$comments.createdAt",
+                            name: "$userDetails.fullname",
+                            city: "$userDetails.city",
+                            pic: "$userDetails.pic"
+                        },
+                    },
+                    length: {
+                        $max: "$length"
+                    }
+                },
+            },
+        ]
+        let realcomments = await commentsCollection.aggregate(realcommentpipeline)
+        realcomments = _.keyBy(realcomments, (comment) => comment._id.toString())
+        _.forEach(posts, (post) => {
+            const postIdString = post._id.toString();
+            if (realcomments[postIdString]) {
+                realcomments[postIdString].comments = commentsFormatHelper(realcomments[postIdString].comments, req.user._id);
+            } else {
+                realcomments[postIdString] = { comments: [] }; // If the post doesn't exist, initialize the comments as an empty array
+            }
+            liked = new Set(post.likes.map(liked => liked.toString()))
+            output.posts.push({
+                _id: post._id,
+                saved: req.user.saved_posts.includes(mongoId(post._id)),
+                posted_by_id: post.posted_by,
+                posted_by: users[post.posted_by.toString()].username,
+                posted_by_city: users[post.posted_by.toString()].city,
+                turn_off_comments: post.turn_off_comments ? true : false,
+                is_deleted: post.is_deleted ? true : false,
+                pic: users[post.posted_by.toString()].pic.url,
+                caption: post.caption,
+                files: post.files,
+                liked: liked.has(req.user._id.toString()),
+                likescount: post.likescount,
+                commentscount: realcomments[postIdString]?.length ?? 0,
+                post_date: post.date,
+                post_time: post.time,
+                post_place: post.city,
+            })
         })
-    })
-    output.logged_in_user.pic = req.user.pic
-    output.logged_in_user.name = req.user.fullname
-    output.logged_in_user.city = req.user.city
-    output.isLastPage = output.posts.length < constants.PAGE_LIMIT ? true : false
-    output.comments = realcomments
-    let shareUsersPipeline = [
-        {
-            $match: {
-                _id: {
-                    $ne: req.user._id
+        output.logged_in_user.pic = req.user.pic
+        output.logged_in_user.name = req.user.fullname
+        output.logged_in_user.city = req.user.city
+        output.isLastPage = output.posts.length < constants.PAGE_LIMIT ? true : false
+        output.comments = realcomments
+        let shareUsersPipeline = [
+            {
+                $match: {
+                    _id: {
+                        $ne: req.user._id
+                    }
                 }
+            },
+            {
+                $project: {
+                    _id: 1,
+                    pic: 1,
+                    city: 1,
+                    fullname: 1,
+                    username: 1
+                }
+            },
+            {
+                $limit: constants.PAGE_LIMIT
             }
-        },
-        {
-            $project: {
-                _id: 1,
-                pic: 1,
-                city: 1,
-                fullname: 1,
-                username: 1
-            }
-        },
-        {
-            $limit: constants.PAGE_LIMIT
-        }
-    ]
-    output.shareUsers = await userCollection.aggregate(shareUsersPipeline)
-    output.shareIsLastPage = output.shareUsers.length < constants.PAGE_LIMIT ? true : false
-    output.selfPost = _.isEqual(posts[0].posted_by, req.user._id)
-    output.sharePageLimit = constants.PAGE_LIMIT
-    return new SuccessResponse(res, { message: output })
+        ]
+        output.shareUsers = await userCollection.aggregate(shareUsersPipeline)
+        output.shareIsLastPage = output.shareUsers.length < constants.PAGE_LIMIT ? true : false
+        output.selfPost = _.isEqual(posts[0].posted_by, req.user._id)
+        output.sharePageLimit = constants.PAGE_LIMIT
+        return new SuccessResponse(res, { message: output })
+    }
+    catch (err) {
+        console.error("error in getsinglepost: ",err)
+        return new ErrorResponse(res, { message: 'Error fetching post' })
+    }
 }
 const likeComment = async (req, res) => {
     try {
@@ -843,7 +861,8 @@ const likeComment = async (req, res) => {
     }
 }
 const savePost = async (req, res) => {
-    let output = {}
+    try {
+        let output = {}
     if (req.body.saved) {
         if (_.isNil(req.user.saved_posts)) {
             req.user.saved_posts = [mongoId(req.body.post_id)]
@@ -862,9 +881,15 @@ const savePost = async (req, res) => {
     }
     await req.user.save()
     return new SuccessResponse(res, output)
+    }
+    catch (err) {
+        console.log("error in savePost: " + err.message);
+        return new ErrorResponse(res, "error in savePost: ");
+    }
 }
 const getSavedPosts = async (req, res) => {
-    let output = {}
+    try {
+        let output = {}
     postPipeline = [
         {
             $match: {
@@ -883,6 +908,11 @@ const getSavedPosts = async (req, res) => {
     ]
     output.posts = await postCollection.aggregate(postPipeline)
     return new SuccessResponse(res, { ...output })
+    }
+    catch (err) {
+        console.log("error in getSavedPosts: " + err.message);
+        return new ErrorResponse(res, "error in getSavedPosts: ");
+    }
 }
 
 const turnComments = async (req, res) => {

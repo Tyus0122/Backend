@@ -15,32 +15,38 @@ function getAnotherId(arr, _id) {
 }
 
 const postProfileMessage = async (req, res) => {
-    let otherUser_id = mongoId(req.body.otherUser_id)
-    const conversationPipeline = [
-        {
-            $match: {
-                $or: [
-                    { users: [req.user._id, otherUser_id] },
-                    { users: [otherUser_id, req.user._id] }
-                ]
+    try {
+        let otherUser_id = mongoId(req.body.otherUser_id)
+        const conversationPipeline = [
+            {
+                $match: {
+                    $or: [
+                        { users: [req.user._id, otherUser_id] },
+                        { users: [otherUser_id, req.user._id] }
+                    ]
+                }
             }
+        ]
+        let conversation = await conversationCollection.aggregate(conversationPipeline)
+        let output = {}
+        if (conversation.length === 0) {
+            const conversation = new conversationCollection({
+                users: [req.user._id, otherUser_id],
+                lastMessage: null,
+                senderId: null,
+            })
+            await conversation.save()
+            output.conversation_id = conversation._id
         }
-    ]
-    let conversation = await conversationCollection.aggregate(conversationPipeline)
-    let output = {}
-    if (conversation.length === 0) {
-        const conversation = new conversationCollection({
-            users: [req.user._id, otherUser_id],
-            lastMessage: null,
-            senderId: null,
-        })
-        await conversation.save()
-        output.conversation_id = conversation._id
+        else {
+            output.conversation_id = conversation[0]._id
+        }
+        return new SuccessResponse(res, { posts: output })
     }
-    else {
-        output.conversation_id = conversation[0]._id
+    catch (error) {
+        console.error('error in postProfileMessage: ', error)
+        return new ErrorResponse(res, error.message, 500)
     }
-    return new SuccessResponse(res, { posts: output })
 }
 
 const getMessages = async (req, res) => {
@@ -106,59 +112,65 @@ const getMessages = async (req, res) => {
     }
 }
 const getAllMessages = async (req, res) => {
-    const conversation_id = mongoId(req.query.conversation_id)
-    const otherUser_id = mongoId(req.query.otherUser_id)
-    let output = {}
-    const messagesPipeline = [
-        {
-            $match: {
-                conversation_id: conversation_id
-            },
-
-        },
-        {
-            $sort: {
-                createdAt: -1
-            }
-        },
-        {
-            $project: {
-                message: 1,
-                time: "$createdAt",
-                isSender: {
-                    $cond: {
-                        if: { $eq: ["$sender_id", req.user._id] },
-                        then: true,
-                        else: false
-                    }
+    try {
+        const conversation_id = mongoId(req.query.conversation_id)
+        const otherUser_id = mongoId(req.query.otherUser_id)
+        let output = {}
+        const messagesPipeline = [
+            {
+                $match: {
+                    conversation_id: conversation_id
                 },
-                type: 1,
-                is_deleted: {
-                    $cond: {
-                        if: { $eq: ["$is_deleted", true] },
-                        then: true,
-                        else: false
+
+            },
+            {
+                $sort: {
+                    createdAt: -1
+                }
+            },
+            {
+                $project: {
+                    message: 1,
+                    time: "$createdAt",
+                    isSender: {
+                        $cond: {
+                            if: { $eq: ["$sender_id", req.user._id] },
+                            then: true,
+                            else: false
+                        }
+                    },
+                    type: 1,
+                    is_deleted: {
+                        $cond: {
+                            if: { $eq: ["$is_deleted", true] },
+                            then: true,
+                            else: false
+                        }
                     }
                 }
             }
-        }
-    ]
-    output.messages = await messagesCollection.aggregate(messagesPipeline)
-    const usersPipeline = [
-        {
-            $match: {
-                _id: otherUser_id
+        ]
+        output.messages = await messagesCollection.aggregate(messagesPipeline)
+        const usersPipeline = [
+            {
+                $match: {
+                    _id: otherUser_id
+                }
             }
-        }
-    ]
-    const otherUser = await userCollection.aggregate(usersPipeline)
-    output.pic = otherUser[0].pic
-    output.fullname = otherUser[0].fullname
-    output.username = otherUser[0].username
-    output._id = otherUser[0]._id
-    output.isLastPage = output.messages.length < constants.PAGE_LIMIT ? true : false
-    output.logged_in_user_id = req.user._id
-    return new SuccessResponse(res, output)
+        ]
+        const otherUser = await userCollection.aggregate(usersPipeline)
+        output.pic = otherUser[0].pic
+        output.fullname = otherUser[0].fullname
+        output.username = otherUser[0].username
+        output._id = otherUser[0]._id
+        output.isLastPage = output.messages.length < constants.PAGE_LIMIT ? true : false
+        output.logged_in_user_id = req.user._id
+        return new SuccessResponse(res, output)
+    }
+    catch (error) {
+        console.error('error in getAllMessages', error.message)
+        return new ErrorResponse(res, error.message, 500)
+    }
 }
 const deleteConversation = async (req, res) => {
     try {
@@ -183,77 +195,83 @@ const deleteConversation = async (req, res) => {
 };
 
 const getConversations = async (req, res) => {
-    let output = {}
-    output.conversations = []
-    const conversationsPipeline = [
-        {
-            $match: {
-                users: {
-                    $in: [
-                        mongoId(req.user._id)
-                    ]
+    try {
+        let output = {}
+        output.conversations = []
+        const conversationsPipeline = [
+            {
+                $match: {
+                    users: {
+                        $in: [
+                            mongoId(req.user._id)
+                        ]
+                    }
                 }
-            }
-        },
-        {
-            $addFields: {
-                otherUserId: {
-                    $arrayElemAt: [
-                        {
-                            $filter: {
-                                input: "$users",
-                                as: "userId",
-                                cond: {
-                                    $and: [
-                                        { $ne: ["$$userId", mongoId(req.user._id)] }, // Exclude the current user
-                                        { $not: { $in: ["$$userId", req.user.blocked_users] } } // Exclude blocked users
-                                    ]
+            },
+            {
+                $addFields: {
+                    otherUserId: {
+                        $arrayElemAt: [
+                            {
+                                $filter: {
+                                    input: "$users",
+                                    as: "userId",
+                                    cond: {
+                                        $and: [
+                                            { $ne: ["$$userId", mongoId(req.user._id)] }, // Exclude the current user
+                                            { $not: { $in: ["$$userId", req.user.blocked_users] } } // Exclude blocked users
+                                        ]
+                                    }
                                 }
-                            }
-                        },
-                        0
-                    ]
+                            },
+                            0
+                        ]
+                    }
                 }
-            }
-        },
-        {
-            $lookup: {
-                from: "users",
-                localField: "otherUserId",
-                foreignField: "_id",
-                as: "otherUser"
-            }
-        },
-        {
-            $unwind: "$otherUser"
-        },
-        {
-            $match: {
-                "otherUser.username": { $regex: req.query.search, $options: 'i' }
-            }
-        },
-        {
-            $project: {
-                otherUser_id: "$otherUser._id",
-                fullname: "$otherUser.fullname",
-                username: "$otherUser.username",
-                pic: "$otherUser.pic",
-                conversation_id: "$_id",
-                lastMessage: "$lastMessage",
-                lastMessageTime: "$lastMessageTime"
-            }
-        },
-        {
-            $sort: {
-                lastMessageTime: -1
-            }
-        },
-        ...limitHelper(req.query.page)
-    ]
-    output.conversations = await conversationCollection.aggregate(conversationsPipeline)
-    output.conversations.map(conversation => conversation.lastMessageTime = formatDate(conversation.lastMessageTime))
-    output.isLastPage = output.conversations.length < constants.PAGE_LIMIT ? true : false
-    return new SuccessResponse(res, output)
+            },
+            {
+                $lookup: {
+                    from: "users",
+                    localField: "otherUserId",
+                    foreignField: "_id",
+                    as: "otherUser"
+                }
+            },
+            {
+                $unwind: "$otherUser"
+            },
+            {
+                $match: {
+                    "otherUser.username": { $regex: req.query.search, $options: 'i' }
+                }
+            },
+            {
+                $project: {
+                    otherUser_id: "$otherUser._id",
+                    fullname: "$otherUser.fullname",
+                    username: "$otherUser.username",
+                    pic: "$otherUser.pic",
+                    conversation_id: "$_id",
+                    lastMessage: "$lastMessage",
+                    lastMessageTime: "$lastMessageTime"
+                }
+            },
+            {
+                $sort: {
+                    lastMessageTime: -1
+                }
+            },
+            ...limitHelper(req.query.page)
+        ]
+        output.conversations = await conversationCollection.aggregate(conversationsPipeline)
+        output.conversations.map(conversation => conversation.lastMessageTime = formatDate(conversation.lastMessageTime))
+        output.isLastPage = output.conversations.length < constants.PAGE_LIMIT ? true : false
+        return new SuccessResponse(res, output)
+    }
+    catch (error) {
+        console.error('getConversations error: ', error.message)
+        return new ErrorResponse(res, error.message, 500)
+    }
 }
 
 

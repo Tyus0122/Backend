@@ -204,36 +204,42 @@ const rejectConnectionRequest = async (req, res) => {
 }
 
 const getLoggedInUser = async (req, res) => {
-    let output = {}
-    output.fullname = req.user.fullname
-    output.username = req.user.username
-    output.city = req.user.city
-    output.accomodation = req.user.accomodation
-    output.username = req.user.username
-    output.university = req.user.university
-    output.pic = req.user.pic
-    output.bio = req.user.bio
-    output.connectionslength = req.user.connections.length
-    output._id = req.user._id
-    let postsPipeline = [
-        {
-            $match: {
-                posted_by: req.user._id,
-                is_deleted: { $ne: true }
+    try {
+        let output = {}
+        output.fullname = req.user.fullname
+        output.username = req.user.username
+        output.city = req.user.city
+        output.accomodation = req.user.accomodation
+        output.username = req.user.username
+        output.university = req.user.university
+        output.pic = req.user.pic
+        output.bio = req.user.bio
+        output.connectionslength = req.user.connections.length
+        output._id = req.user._id
+        let postsPipeline = [
+            {
+                $match: {
+                    posted_by: req.user._id,
+                    is_deleted: { $ne: true }
+                },
             },
-        },
-        {
-            $sort: {
-                createdAt: -1
+            {
+                $sort: {
+                    createdAt: -1
+                }
+            },
+            {
+                $limit: constants.PAGE_LIMIT
             }
-        },
-        {
-            $limit: constants.PAGE_LIMIT
-        }
-    ]
-    output.posts = await postCollection.aggregate(postsPipeline)
-
-    return new SuccessResponse(res, { user: output })
+        ]
+        output.posts = await postCollection.aggregate(postsPipeline)
+    
+        return new SuccessResponse(res, { user: output })
+    }
+    catch (e) {
+        console.log("error in getLoggedInUser: ", e.message)
+        return new ErrorResponse(res, "error in getting user")
+    }
 }
 const getLoggedInUser_id = async (req, res) => {
     try {
@@ -249,7 +255,8 @@ const getLoggedInUser_id = async (req, res) => {
 }
 
 const getLoggedInUserPosts = async (req, res) => {
-    let output = {}
+    try {
+        let output = {}
     output.isLastPage = false
     let postsPipeline = [
         {
@@ -273,61 +280,72 @@ const getLoggedInUserPosts = async (req, res) => {
         output.isLastPage = true
     }
     return new SuccessResponse(res, { posts: output })
+    }
+    catch (e) {
+        console.log("error in getLoggedInUserPosts: ", e.message)
+        return new ErrorResponse(res, "error in getting user posts")
+    }
 }
 
 const getUserProfile = async (req, res) => {
-    const userPipeline = [
-        {
-            $match: {
-                _id: mongoId(req.query.user_id)
+    try {
+        const userPipeline = [
+            {
+                $match: {
+                    _id: mongoId(req.query.user_id)
+                }
             }
+        ]
+        let output = {}
+        let user = await userCollection.aggregate(userPipeline)
+        user = user[0]
+        output.fullname = user.fullname
+        output.username = user.username
+        output.city = user.city
+        output.accomodation = user.accomodation
+        output.username = user.username
+        output.university = user.university
+        output.pic = user.pic
+        output.bio = user.bio
+        output.connectionslength = user.connections.length
+        output._id = user._id
+        let postsPipeline = [
+            {
+                $match: {
+                    posted_by: mongoId(req.query.user_id),
+                    is_deleted: { $ne: true }
+                }
+            },
+            {
+                $sort: {
+                    createdAt: -1
+                }
+            },
+            {
+                $limit: constants.PAGE_LIMIT
+            }
+        ]
+        output.posts = await postCollection.aggregate(postsPipeline)
+        output.self = user._id.toString() == req.user._id.toString()
+        let connections = new Set(user.connections.map(id => id.toString()))
+        let connectionRequests = new Set(user.connectionRequests.map(id => id.toString()))
+        let connectionRequestssent = new Set(user.connectionRequestssent.map(id => id.toString()))
+        output.connectionStatus = 'connect'
+        if (connections.has(req.user._id.toString())) {
+            output.connectionStatus = 'connected'
         }
-    ]
-    let output = {}
-    let user = await userCollection.aggregate(userPipeline)
-    user = user[0]
-    output.fullname = user.fullname
-    output.username = user.username
-    output.city = user.city
-    output.accomodation = user.accomodation
-    output.username = user.username
-    output.university = user.university
-    output.pic = user.pic
-    output.bio = user.bio
-    output.connectionslength = user.connections.length
-    output._id = user._id
-    let postsPipeline = [
-        {
-            $match: {
-                posted_by: mongoId(req.query.user_id),
-                is_deleted: { $ne: true }
-            }
-        },
-        {
-            $sort: {
-                createdAt: -1
-            }
-        },
-        {
-            $limit: constants.PAGE_LIMIT
+        else if (connectionRequests.has(req.user._id.toString())) {
+            output.connectionStatus = 'connecting'
         }
-    ]
-    output.posts = await postCollection.aggregate(postsPipeline)
-    output.self = user._id.toString() == req.user._id.toString()
-    let connections = new Set(user.connections.map(id => id.toString()))
-    let connectionRequests = new Set(user.connectionRequests.map(id => id.toString()))
-    let connectionRequestssent = new Set(user.connectionRequestssent.map(id => id.toString()))
-    output.connectionStatus = 'connect'
-    if (connections.has(req.user._id.toString())) {
-        output.connectionStatus = 'connected'
+        else if (connectionRequestssent.has(req.user._id.toString())) {
+            output.connectionStatus = 'accpet'
+        }
+        return new SuccessResponse(res, { user: output })
     }
-    else if (connectionRequests.has(req.user._id.toString())) {
-        output.connectionStatus = 'connecting'
+    catch (e) {
+        console.log("error in getUserProfile: ", e.message)
+        return new ErrorResponse(res, "error in getting user profile")
     }
-    else if (connectionRequestssent.has(req.user._id.toString())) {
-        output.connectionStatus = 'accpet'
-    }
-    return new SuccessResponse(res, { user: output })
 }
 const getUserPosts = async (req, res) => {
     try {
@@ -365,21 +383,27 @@ const getUserPosts = async (req, res) => {
 }
 
 const editProfilePost = async (req, res) => {
-    let user = await userCollection.findOne({ _id: req.user._id })
-    if (req.body.changePic == 'true') {
-        const filename = generateUniqueFileName(req.file.originalname);
-        await uploadFile(filename, req.file.buffer, req.file.mimetype);
-        const uploadedFile = getFileMetadata({ ...req.file, unqFileName: filename });
-        user.pic = uploadedFile
+    try {
+        let user = await userCollection.findOne({ _id: req.user._id })
+        if (req.body.changePic == 'true') {
+            const filename = generateUniqueFileName(req.file.originalname);
+            await uploadFile(filename, req.file.buffer, req.file.mimetype);
+            const uploadedFile = getFileMetadata({ ...req.file, unqFileName: filename });
+            user.pic = uploadedFile
+        }
+        user.fullname = req.body.fullname
+        user.username = req.body.username
+        user.bio = req.body.bio
+        user.city = req.body.city
+        user.university = req.body.university
+        user.accomodation = req.body.accomodation
+        await user.save()
+        return new SuccessResponse(res, "successfully edited")
     }
-    user.fullname = req.body.fullname
-    user.username = req.body.username
-    user.bio = req.body.bio
-    user.city = req.body.city
-    user.university = req.body.university
-    user.accomodation = req.body.accomodation
-    await user.save()
-    return new SuccessResponse(res, "successfully edited")
+    catch (e) {
+        console.log("error in editProfilePost: ", e.message)
+        return new ErrorResponse(res, "error in editing profile")
+    }
 }
 const shareProfleUsers = async (req, res) => {
 
