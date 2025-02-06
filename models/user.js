@@ -57,7 +57,7 @@ let schema = new mongoose.Schema(
         },
         city: {
             type: String,
-            default: "N-A"
+            default: "-"
         },
         accomodation: {
             type: Boolean,
@@ -65,11 +65,11 @@ let schema = new mongoose.Schema(
         },
         university: {
             type: String,
-            default: "N-A"
+            default: "-"
         },
         bio: {
             type: String,
-            default: "N-A"
+            default: "-"
         },
         pic: {
             type: {
