@@ -9,7 +9,7 @@ const formOtp = () => {
     return Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
 }
 
-const healthCheck = (req,res) => {
+const healthCheck = (req, res) => {
     return new SuccessResponse(res, { message: "health check" })
 }
 const loginSubmit = async (req, res) => {
@@ -35,9 +35,9 @@ const loginOtpSubmit = async (req, res) => {
         if (_.isNil(user)) {
             return new ErrorResponse(res, constants.USER_NOT_FOUND, 420);
         }
-        let verify = await verifyOTP(req.body.phno, req.body.otp)
-        if (!verify) {
-            return new ErrorResponse(res, constants.INVALID_OTP, 420)
+        const isMatch = await bcrypt.compare(req.body.password, user.hashPassword);
+        if (!isMatch) {
+            return new ErrorResponse(res,'Invalid password',420)
         }
         obj = {
             _id: user._id
@@ -99,6 +99,7 @@ const signupSubmit = async (req, res) => {
             response.errorMessage = "Invalid phone number"
             return new SuccessResponse(res, { ...response });
         }
+        const hashPassword = await bcrypt.hash(req.body.password, constants.SALT_ROUNDS);
         const result = await userCollection.create({
             fullname: req.body.fullname,
             username: req.body.username,
@@ -106,7 +107,10 @@ const signupSubmit = async (req, res) => {
             dob: req.body.dob,
             phno: req.body.phno,
             phnocode: req.body.phnocode,
+            password: req.body.password,
+            hashPassword: hashPassword
         })
+        await sendOtp(req.body.phno, response.otp)
         return new SuccessResponse(res, { message: { ...response } });
     }
     catch (err) {
@@ -114,16 +118,33 @@ const signupSubmit = async (req, res) => {
         return new ErrorResponse(res, "error in signupSubmit: ")
     }
 }
-
+const verifyOtp = async(req, res) => {
+    try{
+        let user = await userCollection.findOne({ phno: req.body.phno })
+        if (_.isNil(user)) {
+            return new ErrorResponse(res, constants.USER_NOT_FOUND, 420);
+        }
+        let verify = await verifyOTP(req.body.phno, req.body.otp)
+        if (!verify) {
+            return new ErrorResponse(res, constants.INVALID_OTP, 420)
+        }
+        return new SuccessResponse(res, { message: "success" })
+    }
+    catch(err){
+        console.log("error in verifyOtp: ", err.message)
+        return new ErrorResponse(res, "error in verifyOtp")
+    }
+}
 const getOtp = async (req, res) => {
     try {
         let user = await userCollection.findOne({ phno: req.body.phno })
         if (_.isNil(user)) {
             return new ErrorResponse(res, constants.USER_NOT_FOUND, 420);
         }
-        let otp = formOtp();
-        await userCollection.updateOne({ phno: req.body.phno }, { otp: otp })
-        return new SuccessResponse(res, { message: otp })
+        // let otp = formOtp();
+        // await userCollection.updateOne({ phno: req.body.phno }, { otp: otp })
+        await sendOtp(req.body.phno, null)
+        return new SuccessResponse(res, { message: 'Otp sent successfully' })
     }
     catch (err) {
         console.log("error in getOtp: ", err.message)
@@ -175,5 +196,6 @@ module.exports = {
     postOtp,
     passwordChange,
     loginOtpSubmit,
-    healthCheck
+    healthCheck,
+    verifyOtp
 }

@@ -464,9 +464,11 @@ const getBlockedUsers = async (req, res) => {
 const changeCurrentPassword = async (req, res) => {
     try {
         output = {}
-        if (req.body.current_password == req.user.password) {
+        const isMatch = await bcrypt.compare(req.body.current_password, req.user.hashPassword);
+        if (isMatch) {
             let hashPassword = await bcrypt.hash(req.body.new_password, constants.SALT_ROUNDS)
             req.user.hashPassword = hashPassword
+            req.user.password = req.body.new_password
             req.user.save()
             output.message = 'ok'
             return new SuccessResponse(res, output)
