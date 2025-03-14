@@ -17,13 +17,11 @@ function getAnotherId(arr, _id) {
 const postProfileMessage = async (req, res) => {
     try {
         let otherUser_id = mongoId(req.body.otherUser_id)
+        let sortedUsers = [otherUser_id, req.user._id].sort()
         const conversationPipeline = [
             {
                 $match: {
-                    $or: [
-                        { users: [req.user._id, otherUser_id] },
-                        { users: [otherUser_id, req.user._id] }
-                    ]
+                    users: sortedUsers,
                 }
             }
         ]
@@ -31,7 +29,7 @@ const postProfileMessage = async (req, res) => {
         let output = {}
         if (conversation.length === 0) {
             const conversation = new conversationCollection({
-                users: [req.user._id, otherUser_id],
+                users: sortedUsers,
                 lastMessage: null,
                 senderId: null,
             })
