@@ -18,7 +18,7 @@ const commentsFormatHelper = (comments, logged_in_user_id) => {
             pic: comment.pic,
             name: comment.name,
             comment: comment.comment,
-            time: formatDateForComments(comment.time),
+            time: formatDateForComments(comment.createdAt),
             city: comment.city,
             likes: _.isNil(comment.likes) ? 0 : comment.likes.length,
             liked: _.isNil(comment.likes) ? false : comment.likes.map(item => item.toString()).includes(logged_in_user_id.toString())
