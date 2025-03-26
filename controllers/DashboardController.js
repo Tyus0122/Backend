@@ -40,6 +40,7 @@ const Dashboard = async (req, res) => {
 
 const postPost = async (req, res) => {
     try {
+        req.body.peopleTagged = req.body.peopleTagged == 'undefined' ? '[]' : req.body.peopleTagged
         const uploadedFiles = await Promise.all(
             req.files.map(async (file) => {
                 const filename = generateUniqueFileName(file.originalname);
@@ -61,7 +62,7 @@ const postPost = async (req, res) => {
         return new SuccessResponse(res, { message: result });
     } catch (err) {
         console.log("error in postPost: " + err.message);
-        return new ErrorResponse(err, "error in postPost: ");
+        return new ErrorResponse(res, "error in postPost: ");
     }
 };
 
@@ -245,7 +246,7 @@ const getPosts = async (req, res) => {
                     },
                     posted_by: {
                         // $nin: [req.user._id, ...req.user.blocked_users]
-                        $nin: [ ...req.user.blocked_users]
+                        $nin: [...req.user.blocked_users]
                     },
                     city: { $regex: new RegExp(req.query.search, 'i') },
                     date: { $regex: new RegExp(req.query.date, 'i') }
@@ -449,14 +450,14 @@ const getHomePosts = async (req, res) => {
         posts = posts.filter((post) => {
             const [day, month, year] = post.date.split('-'); // Split the date into day, month, year
             const [hours, minutes, seconds] = post.time.replace(/\u202F/g, ' ').split(' ')[0].split(':'); // Split the time into hours and minutes
-    
+
             // Create a Date object for the post's date and time
             let dateRef = `${year}-${month}-${day}T${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}:${seconds.padStart(2, '0')}`
             const postDate = new Date(dateRef);
-    
+
             // Get the current date and time
             const currentDate = new Date();
-    
+
             // Compare the post's date and time with the current date and time
             return postDate > currentDate;
         });
@@ -469,7 +470,7 @@ const getHomePosts = async (req, res) => {
                         },
                         posted_by: {
                             $nin: [req.user._id, ...req.user.blocked_users],
-    
+
                         },
                         city: req.user.city,
                     }
@@ -485,14 +486,14 @@ const getHomePosts = async (req, res) => {
             posts = [...posts, ...posts_append].filter((post) => {
                 const [day, month, year] = post.date.split('-'); // Split the date into day, month, year
                 const [hours, minutes, seconds] = post.time.replace(/\u202F/g, ' ').split(' ')[0].split(':'); // Split the time into hours and minutes
-    
+
                 // Create a Date object for the post's date and time
                 let dateRef = `${year}-${month}-${day}T${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}:${seconds.padStart(2, '0')}`
                 const postDate = new Date(dateRef);
-    
+
                 // Get the current date and time
                 const currentDate = new Date();
-    
+
                 // Compare the post's date and time with the current date and time
                 return postDate > currentDate;
             });
@@ -656,7 +657,7 @@ const getHomePosts = async (req, res) => {
         return new SuccessResponse(res, { message: output })
     }
     catch (err) {
-        console.error("error in getHomePosts: ",err)
+        console.error("error in getHomePosts: ", err)
         return new ErrorResponse(res, { message: 'Error fetching posts' })
     }
 }
@@ -835,7 +836,7 @@ const getsinglepost = async (req, res) => {
         return new SuccessResponse(res, { message: output })
     }
     catch (err) {
-        console.log("error in getsinglepost: ",err)
+        console.log("error in getsinglepost: ", err)
         return new ErrorResponse(res, { message: 'Error fetching post' })
     }
 }
@@ -865,24 +866,24 @@ const likeComment = async (req, res) => {
 const savePost = async (req, res) => {
     try {
         let output = {}
-    if (req.body.saved) {
-        if (_.isNil(req.user.saved_posts)) {
-            req.user.saved_posts = [mongoId(req.body.post_id)]
+        if (req.body.saved) {
+            if (_.isNil(req.user.saved_posts)) {
+                req.user.saved_posts = [mongoId(req.body.post_id)]
+            }
+            else if (!req.user.saved_posts.includes(mongoId(req.body.post_id))) {
+                req.user.saved_posts.push(mongoId(req.body.post_id))
+            }
         }
-        else if (!req.user.saved_posts.includes(mongoId(req.body.post_id))) {
-            req.user.saved_posts.push(mongoId(req.body.post_id))
+        else {
+            if (_.isNil(req.user.saved_posts)) {
+                req.user.saved_posts = []
+            }
+            else if (req.user.saved_posts.includes(mongoId(req.body.post_id))) {
+                req.user.saved_posts = req.user.saved_posts.filter(post => post.toString() !== mongoId(req.body.post_id).toString())
+            }
         }
-    }
-    else {
-        if (_.isNil(req.user.saved_posts)) {
-            req.user.saved_posts = []
-        }
-        else if (req.user.saved_posts.includes(mongoId(req.body.post_id))) {
-            req.user.saved_posts = req.user.saved_posts.filter(post => post.toString() !== mongoId(req.body.post_id).toString())
-        }
-    }
-    await req.user.save()
-    return new SuccessResponse(res, output)
+        await req.user.save()
+        return new SuccessResponse(res, output)
     }
     catch (err) {
         console.log("error in savePost: " + err.message);
@@ -892,24 +893,24 @@ const savePost = async (req, res) => {
 const getSavedPosts = async (req, res) => {
     try {
         let output = {}
-    postPipeline = [
-        {
-            $match: {
-                _id: { $in: req.user.saved_posts },
-                is_deleted: { $ne: true }
+        postPipeline = [
+            {
+                $match: {
+                    _id: { $in: req.user.saved_posts },
+                    is_deleted: { $ne: true }
+                },
             },
-        },
-        {
-            $project: {
-                files: {
-                    $arrayElemAt: ["$files", 0]
+            {
+                $project: {
+                    files: {
+                        $arrayElemAt: ["$files", 0]
+                    }
                 }
-            }
-        },
-        ...limitHelper(req.query.page)
-    ]
-    output.posts = await postCollection.aggregate(postPipeline)
-    return new SuccessResponse(res, { ...output })
+            },
+            ...limitHelper(req.query.page)
+        ]
+        output.posts = await postCollection.aggregate(postPipeline)
+        return new SuccessResponse(res, { ...output })
     }
     catch (err) {
         console.log("error in getSavedPosts: " + err.message);
