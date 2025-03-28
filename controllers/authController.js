@@ -1,6 +1,9 @@
 const { SuccessResponse, ErrorResponse } = require('../helpers/response');
 const jwt = require("jsonwebtoken")
 const userCollection = require("../models/user");
+const postCollection = require('../models/post')
+const conversationCollection = require('../models/conversation')
+const commentsCollection = require('../models/comments')
 const _ = require('lodash')
 const { constants } = require("../utils/constants")
 const bcrypt = require('bcrypt');
@@ -37,7 +40,7 @@ const loginOtpSubmit = async (req, res) => {
         }
         const isMatch = await bcrypt.compare(req.body.password, user.hashPassword);
         if (!isMatch) {
-            return new ErrorResponse(res,'Invalid password',420)
+            return new ErrorResponse(res, 'Invalid password', 420)
         }
         obj = {
             _id: user._id
@@ -118,8 +121,8 @@ const signupSubmit = async (req, res) => {
         return new ErrorResponse(res, "error in signupSubmit: ")
     }
 }
-const verifyOtp = async(req, res) => {
-    try{
+const verifyOtp = async (req, res) => {
+    try {
         let user = await userCollection.findOne({ phno: req.body.phno })
         if (_.isNil(user)) {
             return new ErrorResponse(res, constants.USER_NOT_FOUND, 420);
@@ -130,7 +133,7 @@ const verifyOtp = async(req, res) => {
         }
         return new SuccessResponse(res, { message: "success" })
     }
-    catch(err){
+    catch (err) {
         console.log("error in verifyOtp: ", err.message)
         return new ErrorResponse(res, "error in verifyOtp")
     }
@@ -186,6 +189,25 @@ const passwordChange = async (req, res) => {
     }
 }
 
+const deleteAccount = async (req, res) => {
+    try {
+        const userId = req.user._id; // Get user ID from request
+
+        if (!userId) {
+            return new ErrorResponse(res, "User ID not found", 400);
+        }
+        await userCollection.findByIdAndDelete(userId);
+        await postCollection.deleteMany({ posted_by: userId });
+        await conversationCollection.deleteMany({ users: { $in: [userId] } });
+        await commentsCollection.deleteMany({ commentedBy: userId });
+        return new SuccessResponse(res, { message: 'success' })
+    }
+    catch (err) {
+        console.log('error in deleteAccount: ' + err.message)
+        return new ErrorResponse(err, "error in deleteAccount")
+    }
+}
+
 
 module.exports = {
     loginSubmit,
@@ -197,5 +219,6 @@ module.exports = {
     passwordChange,
     loginOtpSubmit,
     healthCheck,
-    verifyOtp
+    verifyOtp,
+    deleteAccount
 }

@@ -374,8 +374,8 @@ const getPosts = async (req, res) => {
                 saved: req.user.saved_posts.includes(mongoId(post._id)),
                 posted_by_id: post.posted_by,
                 turn_off_comments: post.turn_off_comments ? true : false,
-                posted_by: users[post.posted_by.toString()].username,
-                posted_by_city: users[post.posted_by.toString()].city,
+                posted_by: users[post.posted_by.toString()]?.username,
+                posted_by_city: users[post.posted_by.toString()]?.city,
                 pic: users[post.posted_by.toString()].pic?.url,
                 caption: post.caption,
                 files: post.files,
@@ -449,10 +449,10 @@ const getHomePosts = async (req, res) => {
         let posts = await postCollection.aggregate(pipeline)
         posts = posts.filter((post) => {
             const [day, month, year] = post.date.split('-'); // Split the date into day, month, year
-            const [hours, minutes, seconds] = post.time.replace(/\u202F/g, ' ').split(' ')[0].split(':'); // Split the time into hours and minutes
+            const [hours, minutes] = post.time.replace(/\u202F/g, ' ').split(' ')[0].split(':'); // Split the time into hours and minutes
 
             // Create a Date object for the post's date and time
-            let dateRef = `${year}-${month}-${day}T${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}:${seconds.padStart(2, '0')}`
+            let dateRef = `${year}-${month}-${day}T${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}:00`
             const postDate = new Date(dateRef);
 
             // Get the current date and time
@@ -488,7 +488,7 @@ const getHomePosts = async (req, res) => {
                 const [hours, minutes, seconds] = post.time.replace(/\u202F/g, ' ').split(' ')[0].split(':'); // Split the time into hours and minutes
 
                 // Create a Date object for the post's date and time
-                let dateRef = `${year}-${month}-${day}T${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}:${seconds.padStart(2, '0')}`
+                let dateRef = `${year}-${month}-${day}T${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}:00`
                 const postDate = new Date(dateRef);
 
                 // Get the current date and time

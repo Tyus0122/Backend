@@ -1,6 +1,6 @@
 const express = require('express')
 const router = express.Router()
-const { verifyOtp, loginOtpSubmit, loginSubmit, login, signup, signupSubmit, getOtp, postOtp, passwordChange, healthCheck } = require('../controllers/authController')
+const { verifyOtp, loginOtpSubmit, loginSubmit, login, signup, signupSubmit, getOtp, postOtp, passwordChange, healthCheck, deleteAccount } = require('../controllers/authController')
 const { validateToken, preventValidToken } = require('../middlewares/authMidware')
 const { postEditPost, getEditPost, deletePost, turnComments, protectedRoute, Dashboard, postPost, likePost, getCommentReplies, commentPost, getPosts, getHomePosts, getsinglepost, savePost, getComments, likeComment, getSavedPosts } = require('../controllers/DashboardController')
 const { getNotifications, getSuggestions, getRequests, getLastDays } = require('../controllers/notificationsController')
@@ -28,7 +28,6 @@ router.post('/postOtp', preventValidToken, postOtp)
 router.post('/loginOtpSubmit', preventValidToken, loginOtpSubmit)
 router.post('/loginSubmit', preventValidToken, loginSubmit)
 router.post('/changePassword', preventValidToken, passwordChange)
-
 //Dashboard routes
 router.post('/protected', validateToken, upload.single('file'), protectedRoute)
 router.post('/postPost', validateToken, upload.array('files'), postPost)
@@ -76,6 +75,7 @@ router.get('/getAllMessages', validateToken, getAllMessages)
 router.get('/getConversations', validateToken, getConversations)
 router.post('/postMessages', validateToken, postMessages)
 router.post('/deleteConversation', validateToken, deleteConversation)
+router.delete('/deleteAccount', validateToken, deleteAccount)
 
 
 
