@@ -376,7 +376,7 @@ const getPosts = async (req, res) => {
                 turn_off_comments: post.turn_off_comments ? true : false,
                 posted_by: users[post.posted_by.toString()]?.username,
                 posted_by_city: users[post.posted_by.toString()]?.city,
-                pic: users[post.posted_by.toString()].pic?.url,
+                pic: users[post.posted_by.toString()]?.pic?.url,
                 caption: post.caption,
                 files: post.files,
                 liked: liked.has(req.user._id.toString()),
