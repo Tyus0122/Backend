@@ -141,7 +141,15 @@ const removeConnection = async (req, res) => {
             return new SuccessResponse(res, { message: "success" })
         }
         else {
-            return new ErrorResponse(res, "no connection found")
+            let myconnectionrequestsent = new Set(req.user.connectionRequestssent.map(obj => obj.toString()))
+            let connectionrequests = new Set(user.connectionRequests.map(obj => obj.toString()))
+            if (connectionrequests.has(req.user._id.toString()) && myconnectionrequestsent.has(req.body.user_id.toString())) {
+                user.connectionRequests = user.connectionRequests.filter(_id => !_.isEqual(_id, req.user._id))
+                req.user.connectionRequestssent = req.user.connectionRequestssent.filter(_id => !_.isEqual(_id, mongoId(req.body.user_id)))
+                user.save()
+                req.user.save()
+            }
+            return new SuccessResponse(res, {message:"success"})
         }
     }
     catch (e) {
@@ -233,7 +241,7 @@ const getLoggedInUser = async (req, res) => {
             }
         ]
         output.posts = await postCollection.aggregate(postsPipeline)
-    
+
         return new SuccessResponse(res, { user: output })
     }
     catch (e) {
@@ -257,29 +265,29 @@ const getLoggedInUser_id = async (req, res) => {
 const getLoggedInUserPosts = async (req, res) => {
     try {
         let output = {}
-    output.isLastPage = false
-    let postsPipeline = [
-        {
-            $match: {
-                posted_by: req.user._id,
-                is_deleted: { $ne: true }
+        output.isLastPage = false
+        let postsPipeline = [
+            {
+                $match: {
+                    posted_by: req.user._id,
+                    is_deleted: { $ne: true }
+                }
+            },
+            {
+                $sort: {
+                    createdAt: -1
+                }
+            },
+            ...limitHelper(req.query.page),
+            {
+                $limit: constants.PAGE_LIMIT
             }
-        },
-        {
-            $sort: {
-                createdAt: -1
-            }
-        },
-        ...limitHelper(req.query.page),
-        {
-            $limit: constants.PAGE_LIMIT
+        ]
+        output.posts = await postCollection.aggregate(postsPipeline)
+        if (output.posts.length < constants.PAGE_LIMIT) {
+            output.isLastPage = true
         }
-    ]
-    output.posts = await postCollection.aggregate(postsPipeline)
-    if (output.posts.length < constants.PAGE_LIMIT) {
-        output.isLastPage = true
-    }
-    return new SuccessResponse(res, { posts: output })
+        return new SuccessResponse(res, { posts: output })
     }
     catch (e) {
         console.log("error in getLoggedInUserPosts: ", e.message)
