@@ -395,8 +395,8 @@ const editProfilePost = async (req, res) => {
         let user = await userCollection.findOne({ _id: req.user._id })
         if (req.body.changePic == 'true') {
             console.log(req.file)
-            const filename = generateUniqueFileName(req.file.originalname);
-            await uploadFile(filename, req.file.buffer, req.file.mimetype);
+            const filename = generateUniqueFileName(req.file?.originalname);
+            await uploadFile(filename, req.file.buffer, req.file?.mimetype);
             const uploadedFile = getFileMetadata({ ...req.file, unqFileName: filename });
             user.pic = uploadedFile
         }
