@@ -48,7 +48,7 @@ router.post('/turnComments', validateToken, turnComments)
 router.post('/deletePost', validateToken, deletePost)
 router.get('/getEditPost', validateToken, getEditPost)
 
-//user routes
+//user routes   
 router.post('/sendConnectionRequest', validateToken, sendConnectionRequest)
 router.post('/acceptConnectionRequest', validateToken, acceptConnectionRequest)
 router.post('/rejectConnectionRequest', validateToken, rejectConnectionRequest)
