@@ -9,7 +9,7 @@ AWS.config.update({
     region: process.env.region
 });
 function generateUniqueFileName(originalName) {
-    const fileExtension = originalName.split('.').pop(); // extract file extension
+    const fileExtension = originalName?.split('.').pop(); // extract file extension
     const uniqueName = uuidv4(); // generate unique identifier
     return `${uniqueName}.${fileExtension}`;
 }
